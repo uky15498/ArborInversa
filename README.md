@@ -605,12 +605,17 @@ console.log("✓ 已写回");'
 - **日常流程**：改内容 → `node tools/snapshot.js` → 跑自测 → `git commit`
 - **发布打标签**：`git tag -a v1.0.0 -m "…"`；产物由 `python3 tools/build_release.py` 从当前工作区重建，
   所以**打包前先提交**，让 tag 与 `dist/` 内容对得上
-- **远端**：实测本机 **github.com 不通**（443 拒连），**gitee.com / gitcode.com 通**且 `git ls-remote` 正常；
-  将来要上云就推 Gitee 私有库：
-  ```bash
-  git remote add origin https://gitee.com/<你的账号>/arbor-inversa.git
-  git push -u origin main --tags
-  ```
+- **远端（2026-09-14 建立）**：`https://github.com/uky15498/ArborInversa`（**私有**）；
+  当前 `main` 与标签 `v1.0.0` 已推送，本地 `main` 跟踪 `origin/main`
+- ★ **本机推送通道（关键）**：Watt Toolkit 的加速会把 `github.com` 写进 Windows hosts 指向 `127.0.0.1`，
+  而 **WSL 里的 `127.0.0.1` 是 WSL 自己**，所以 WSL 直接 `git push` 必然失败。解决办法（已就绪、不改任何系统文件）：
+  - 转发脚本 `~/.config/arborinversa/github-relay.js`：只把 github 系域名送到 `172.19.32.1:443`（＝Windows 上的加速器，监听 `0.0.0.0:443`）
+  - 加速器是**中间人**（签发者 `CN=SteamTools Certificate / O=BeyondDimension`），其根证书已导出为
+    `~/.config/arborinversa/steamtools-ca.pem`（只要公钥）
+  - 本仓库 local 配置已写 `http.proxy=http://127.0.0.1:8899` 与 `http.sslCAInfo=<上面那份>`
+  - 一键推：`sh ~/.config/arborinversa/gh.sh push`（自动起转发→推→停转发）
+  - ⚠️ **推的时候 Watt Toolkit 必须开着**；关了就推不动
+- 备选远端：`gitee.com`／`gitcode.com` 实测可直连（不受上面那套影响），需要时再加一个 remote 推一份
 
 ### 校验（改完必做）
 
