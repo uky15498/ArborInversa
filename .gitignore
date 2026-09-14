@@ -21,10 +21,13 @@ serve.log
 Thumbs.db
 desktop.ini
 
-# 内容文件：仓库只放框架，任何内容数据都不进库
+# 个人内容一律不进库（仓库只放框架：README ＋ 前端 ＋ 后端 ＋ 工具 ＋ 框架自带的示例树）
 data.before-*.json
 data.backup.json
-media/
+media/*
+# 例外：示例树要用的插图（框架自带的演示素材）必须进库
+!media/示例-框架示意.svg
 
-# 说明：本仓库＝框架（README ＋ 前端 ＋ 后端 ＋ 工具 ＋ 空框架树 data.json）。
-#       你的内容正本在应用目录 C:\\ArborInversa\\ ，给别人看内容用随包的《美术史树-试用.txt》。
+# 说明：仓库的 data.json ＝ 由 示例树.txt 生成的示例树（框架自带、非个人内容），
+#       用 tools/check_data.js 核对一致性。你的内容正本在应用目录 C:\ArborInversa\，
+#       给别人看内容用随包的《美术史树-试用.txt》。

@@ -59,6 +59,7 @@ Source: "{#SrcDir}\data.json";                 DestDir: "{app}"; Flags: onlyifdo
 Source: "{#SrcDir}\media\*";                   DestDir: "{app}\media"; Flags: onlyifdoesntexist uninsneveruninstall recursesubdirs createallsubdirs
 Source: "{#SrcDir}\使用说明.txt";              DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\美术史树-试用.txt";        DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcDir}\示例树.txt";                 DestDir: "{app}"; Flags: ignoreversion
 ; 许可：限非商业（PolyForm Noncommercial 1.0.0），随包必须带上
 Source: "{#SrcDir}\LICENSE.md";                DestDir: "{app}"; Flags: ignoreversion
 

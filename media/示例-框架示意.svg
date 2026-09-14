@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="260" viewBox="0 0 720 260">
+  <rect width="720" height="260" fill="#faf8f4"/>
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif" text-anchor="middle">
+    <!-- 根 -->
+    <rect x="300" y="20" width="120" height="40" rx="6" fill="#e3ece4" stroke="#8fb3a1" stroke-width="2"/>
+    <text x="360" y="45" font-size="16" fill="#111">根</text>
+    <!-- 连接线：根向下 -->
+    <line x1="360" y1="60" x2="360" y2="96" stroke="#8fb3a1" stroke-width="2"/>
+    <line x1="200" y1="96" x2="520" y2="96" stroke="#8fb3a1" stroke-width="2"/>
+    <line x1="200" y1="96" x2="200" y2="126" stroke="#8fb3a1" stroke-width="2"/>
+    <line x1="520" y1="96" x2="520" y2="126" stroke="#8fb3a1" stroke-width="2"/>
+    <!-- 第二层：两枝 -->
+    <rect x="140" y="126" width="120" height="36" rx="6" fill="#f0f5f0" stroke="#8fb3a1"/>
+    <text x="200" y="149" font-size="14" fill="#111">枝</text>
+    <rect x="460" y="126" width="120" height="36" rx="6" fill="#f0f5f0" stroke="#8fb3a1"/>
+    <text x="520" y="149" font-size="14" fill="#111">枝</text>
+    <line x1="200" y1="162" x2="200" y2="192" stroke="#8fb3a1" stroke-width="2"/>
+    <!-- 第三层 -->
+    <rect x="140" y="192" width="120" height="36" rx="6" fill="#f0f5f0" stroke="#8fb3a1"/>
+    <text x="200" y="215" font-size="14" fill="#111">枝</text>
+    <!-- 叶：横向挂在枝右侧 -->
+    <line x1="260" y1="144" x2="330" y2="144" stroke="#c9b79a" stroke-dasharray="4 3"/>
+    <rect x="330" y="128" width="90" height="32" rx="5" fill="#fff" stroke="#c9b79a"/>
+    <text x="375" y="149" font-size="13" fill="#111">叶</text>
+    <text x="375" y="180" font-size="12" fill="#666">一枝可以挂多片叶</text>
+    <text x="360" y="248" font-size="12" fill="#666">根在上，枝向下；叶横向展开</text>
+  </g>
+</svg>

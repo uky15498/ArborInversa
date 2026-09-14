@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成「外发版」：空框架树 → 附带美术史树试用代码 → 打绿色版 zip（安装包另调 ISCC）
+"""生成「外发版」：示例树 → 附带美术史树试用代码 → 打绿色版 zip（安装包另调 ISCC）
 
 用法：
     cd /home/elu/test/doc-tool/daosheng-tree
     node tools/make_trial_code.js              # 先由当前数据生成试用代码文档
     python3 tools/build_release.py             # 再打外发版（zip + 安装包）
 
-外发版的 data.json ＝ **仓库根目录那份空框架树**（仓库自带、人工维护的唯一一份；
-本脚本不再内联一份，免得两处不一致）。个人内容一律不进包。
+外发版的 data.json ＝ **仓库根目录那份示例树**（＝《示例树.txt》生成的框架自带演示树，
+打开软件就能看到它）。个人内容一律不进包；打包前会跑 tools/check_data.js --repo-only 核对，
+仓库那份 data.json 必须与《示例树.txt》一致。
 
 外发版里放了什么、故意不放什么，见 README「打包发布（外发版）」一节。
 """
@@ -64,7 +65,7 @@ ISCC    = os.path.join(WINUSER, "AppData/Local/Programs/Inno Setup 6/ISCC.exe") 
           else "/mnt/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
 DESKTOP = os.path.join(WINUSER, "Desktop") if WINUSER else "/mnt/c/Users/Public/Desktop"
 
-# 外发版的数据 ＝ 仓库根目录那棵空框架树（不含任何个人内容，只留一句引导）
+# 外发版的数据 ＝ 仓库根目录那份**示例树**（框架自带；由 示例树.txt 生成，不含任何个人内容）
 FRAMEWORK_DATA = os.path.join(ROOT, "data.json")
 
 BIN = ["ArborInversa.exe", "ArborInversa.exe.config", "index.html",
@@ -94,22 +95,29 @@ def main():
         return 1
 
     # 2) 暂存目录
+    #    先跑一次内容自检：保证仓库 data.json 就是《示例树.txt》那棵树（不是谁的个人内容）
+    r = sh(["node", os.path.join(ROOT, "tools", "check_data.js"), "--repo-only"])
+    print(r.stdout.strip() or r.stderr.strip())
+    if r.returncode:
+        print("× 内容自检没过（仓库 data.json 应与《示例树.txt》一致）—— 中止")
+        return 1
     if os.path.exists(STAGE): shutil.rmtree(STAGE)
     os.makedirs(os.path.join(STAGE, "media"))
     for f in BIN:
         shutil.copy2(os.path.join(SRC, f), os.path.join(STAGE, f))
     for f in os.listdir(os.path.join(SRC, "media")):
         shutil.copy2(os.path.join(SRC, "media", f), os.path.join(STAGE, "media", f))
-    # 空框架树：直接取仓库那份（与程序写出格式一致：compact、UTF-8 无 BOM）
+    # 示例树：直接取仓库那份（与程序写出格式一致：compact、UTF-8 无 BOM）
     fw = json.load(open(FRAMEWORK_DATA, encoding="utf-8"))
-    if fw.get("children"):
-        print("× 仓库 data.json 不是空框架树（下含 %d 枝）—— 外发版必须是空树，中止"
-              % len(fw["children"]))
+    if not fw.get("name"):
+        print("× 仓库 data.json 缺少 name —— 中止")
         return 1
     shutil.copy2(FRAMEWORK_DATA, os.path.join(STAGE, "data.json"))
     shutil.copy2(os.path.join(ROOT, "win-app", "使用说明-外发版.txt"),
                  os.path.join(STAGE, "使用说明.txt"))
     shutil.copy2(trial, os.path.join(STAGE, "美术史树-试用.txt"))
+    # 示例树（框架自带的演示树）：随包带上，用户可随时重新导入、重置成出厂样子
+    shutil.copy2(os.path.join(ROOT, "示例树.txt"), os.path.join(STAGE, "示例树.txt"))
     # 许可（限非商业）：随包带上，分发时才合规
     shutil.copy2(os.path.join(ROOT, "LICENSE.md"), os.path.join(STAGE, "LICENSE.md"))
     print("✓ 暂存目录：", STAGE_WIN)
@@ -169,9 +177,15 @@ def main():
                 print(f"  ⚠ {os.path.relpath(p, STAGE)} → {sorted(hits)}")
     print("  未发现个人痕迹 ✓" if not bad else f"  {bad} 个文件命中，请检查")
 
-    # 6) 逐文件核对与源目录一致（除刻意替换的那几个）
+    # 6) 逐文件核对
     print("\n=== 内容核对 ===")
-    print("  data.json（外发）= 空树：" , json.load(open(os.path.join(STAGE, "data.json"), encoding="utf-8"))["children"] == [])
+    out_data = json.load(open(os.path.join(STAGE, "data.json"), encoding="utf-8"))
+    same_as_repo = open(os.path.join(STAGE, "data.json"), encoding="utf-8").read() == \
+                   open(FRAMEWORK_DATA, encoding="utf-8").read()
+    print("  data.json（外发）＝ 仓库那份示例树：", same_as_repo,
+          "（根「%s」，下含 %d 枝）" % (out_data.get("name"), len(out_data.get("children", []))))
+    print("  示例树.txt：", os.path.exists(os.path.join(STAGE, "示例树.txt")))
+    print("  许可 LICENSE.md：", os.path.exists(os.path.join(STAGE, "LICENSE.md")))
     print("  试用代码行数：", sum(1 for _ in open(os.path.join(STAGE, "美术史树-试用.txt"), encoding="utf-8")))
     return 0
 
