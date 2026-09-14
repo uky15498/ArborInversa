@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成「外发版」：清空个人内容 → 附带美术史树试用代码 → 打绿色版 zip（安装包另调 ISCC）
+"""生成「外发版」：空框架树 → 附带美术史树试用代码 → 打绿色版 zip（安装包另调 ISCC）
 
 用法：
     cd /home/elu/test/doc-tool/daosheng-tree
     node tools/make_trial_code.js              # 先由当前数据生成试用代码文档
     python3 tools/build_release.py             # 再打外发版（zip + 安装包）
+
+外发版的 data.json ＝ **仓库根目录那份空框架树**（仓库自带、人工维护的唯一一份；
+本脚本不再内联一份，免得两处不一致）。个人内容一律不进包。
 
 外发版里放了什么、故意不放什么，见 README「打包发布（外发版）」一节。
 """
@@ -22,18 +25,8 @@ ZIP_OUT   = os.path.join(DIST, f"ArborInversa-{VER}.zip")
 SETUP_OUT = f"ArborInversa-Setup-{VER}.exe"
 DESKTOP   = "/mnt/c/Users/大象/Desktop"
 
-# 外发版的数据：一棵空树（不含任何个人内容，只留一句引导）
-EMPTY_DATA = {
-    "name": "逆生树",
-    "leaves": [{
-        "name": "概述",
-        "desc": ("逆生树（ArborInversa）是一个通用的树状图框架，\n"
-                 "纵向生长『枝』，横向展开『叶』。\n其根在上而枝向下。\n\n"
-                 "这是一棵空树 —— 点上方「植树」，用文本代码就能种出一整棵树。\n"
-                 "随包的《美术史树-试用.txt》是一份完整的示例树（中国美术史）。")
-    }],
-    "children": []
-}
+# 外发版的数据 ＝ 仓库根目录那棵空框架树（不含任何个人内容，只留一句引导）
+FRAMEWORK_DATA = os.path.join(ROOT, "data.json")
 
 BIN = ["ArborInversa.exe", "ArborInversa.exe.config", "index.html",
        "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll",
@@ -66,8 +59,13 @@ def main():
         shutil.copy2(os.path.join(SRC, f), os.path.join(STAGE, f))
     for f in os.listdir(os.path.join(SRC, "media")):
         shutil.copy2(os.path.join(SRC, "media", f), os.path.join(STAGE, "media", f))
-    with open(os.path.join(STAGE, "data.json"), "w", encoding="utf-8", newline="") as fp:
-        json.dump(EMPTY_DATA, fp, ensure_ascii=False, separators=(",", ":"))   # 与程序写出格式一致
+    # 空框架树：直接取仓库那份（与程序写出格式一致：compact、UTF-8 无 BOM）
+    fw = json.load(open(FRAMEWORK_DATA, encoding="utf-8"))
+    if fw.get("children"):
+        print("× 仓库 data.json 不是空框架树（下含 %d 枝）—— 外发版必须是空树，中止"
+              % len(fw["children"]))
+        return 1
+    shutil.copy2(FRAMEWORK_DATA, os.path.join(STAGE, "data.json"))
     shutil.copy2(os.path.join(ROOT, "win-app", "使用说明-外发版.txt"),
                  os.path.join(STAGE, "使用说明.txt"))
     shutil.copy2(trial, os.path.join(STAGE, "美术史树-试用.txt"))

@@ -10,9 +10,9 @@ node tools/codec.test.js > /dev/null || { echo "× 编解码自测未通过，�
 echo "· 搜索/属性自测…"
 node tools/search.test.js > /dev/null || { echo "× 搜索自测未通过，提交中止"; exit 1; }
 
-echo "· 检查内容快照…"
+echo "· 检查内容快照（示例页 / media / 仓库空框架树）…"
 node tools/snapshot.js --check || {
-  echo "× 库内 data.json 与应用版不一致 —— 先跑：node tools/snapshot.js"
+  echo "× 内容快照不一致 —— 先跑：node tools/snapshot.js"
   exit 1
 }
 
