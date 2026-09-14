@@ -1,0 +1,25 @@
+# 构建产物：可由 tools/build_release.py 重建（安装包 2.6 MB、zip 300 KB，不进库）
+dist/
+
+# Windows 编译产物（可重编；请注意三个 WebView2 DLL 与 ArborInversa.ico 必须进库，否则编不出来）
+win-app/*.exe
+*.pdb
+*.WebView2/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 运行日志与临时文件
+serve.log
+*.log
+*.tmp
+*~
+
+# 系统 / 编辑器垃圾
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 说明：data.before-*.json 是 git 接管前的手工备份（最早期、引入叶之前、配三叶之前…），
+#       作为历史档案**故意保留在库内**；今后有了 git 就不再需要生成新的备份了。

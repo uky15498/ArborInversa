@@ -1,0 +1,181 @@
+// 倒生树 —— Windows 桌面外壳（内嵌 WebView2，无浏览器界面）
+// 数据与页面仍由 WSL 内的 Node 服务提供；本程序只负责"起服务 + 显示窗口"。
+//
+// 目标编译器：Windows 自带 csc.exe (C# 5)，因此回避 C# 6+ 语法
+//（不用字符串插值 $""、不用 ?.、不用表达式体成员、不用 nameof）
+//
+// 编译（在 Windows 侧执行，避免 WSL 内嵌套调用 wsl.exe）：
+//   csc.exe /target:winexe /codepage:65001 /out:DaoShengTree.exe
+//     /reference:System.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll
+//     /reference:Microsoft.Web.WebView2.Core.dll
+//     /reference:Microsoft.Web.WebView2.WinForms.dll
+//     Program.cs
+// 运行时需与 exe 同目录：WebView2Loader.dll、Microsoft.Web.WebView2.Core.dll、
+//   Microsoft.Web.WebView2.WinForms.dll
+using System;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+
+static class Program
+{
+    // ── DPI 感知（解决文字发虚：不声明 DPI 感知会被系统位图拉伸）──
+    [DllImport("user32.dll", SetLastError = true)]
+    static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")]
+    static extern bool SetProcessDPIAware();
+
+    static void EnableDpiAwareness()
+    {
+        // -4 = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        try { if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return; }
+        catch { }
+        try { SetProcessDPIAware(); } catch { }   // 老系统回退：系统级 DPI 感知
+    }
+
+    // ── 可调参数 ────────────────────────────────────────────
+    const string Distro     = "Ubuntu";                                   // WSL 发行版名
+    const string ProjectDir = "/home/elu/test/doc-tool/daosheng-tree";    // 项目目录（WSL 内）
+    const int    Port       = 8460;                                       // 服务端口
+    const string AppTitle   = "倒生树";                                    // 窗口标题
+    const string WslExe     = @"C:\Windows\System32\wsl.exe";
+    // ────────────────────────────────────────────────────────
+
+    static string RunWsl(string args, int timeoutMs)
+    {
+        try
+        {
+            ProcessStartInfo psi = new ProcessStartInfo(WslExe, args);
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError  = true;
+            psi.UseShellExecute        = false;
+            psi.CreateNoWindow         = true;
+            psi.StandardOutputEncoding = Encoding.UTF8;
+
+            Process p = Process.Start(psi);
+            string outp = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(timeoutMs);
+            return outp == null ? "" : outp;
+        }
+        catch (Exception ex) { return "ERR:" + ex.Message; }
+    }
+
+    static string GetWslIp()
+    {
+        string s = RunWsl("-d " + Distro + " hostname -I", 20000);
+        char[] sep = new char[] { ' ', '\t', '\r', '\n' };
+        string[] parts = s.Split(sep, StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            string t = parts[i].Trim();
+            if (t.Length > 0 && char.IsDigit(t[0]) && t.IndexOf('.') > 0) return t;
+        }
+        return "127.0.0.1";
+    }
+
+    static bool PortOpen(string host, int port)
+    {
+        try
+        {
+            using (TcpClient c = new TcpClient())
+            {
+                IAsyncResult ar = c.BeginConnect(host, port, null, null);
+                if (!ar.AsyncWaitHandle.WaitOne(700)) return false;
+                c.EndConnect(ar);
+                return true;
+            }
+        }
+        catch { return false; }
+    }
+
+    // 若 WSL 内服务未运行则拉起（已在运行则跳过）
+    static void EnsureServer()
+    {
+        string cmd = "cd '" + ProjectDir + "'; " +
+                     "curl -sf -o /dev/null http://127.0.0.1:" + Port + "/ || " +
+                     "(setsid node serve.js " + Port + " >serve.log 2>&1 &)";
+        RunWsl("-d " + Distro + " bash -lc \"" + cmd + "\"", 20000);
+    }
+
+    static WebView2 g_web;
+    static string   g_url;
+
+    static void LogError(string tag, Exception ex)
+    {
+        try
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DaoShengTree");
+            Directory.CreateDirectory(dir);
+            string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  [" + tag + "]\r\n" +
+                          ex.GetType().FullName + ": " + ex.Message + "\r\n" +
+                          ex.StackTrace + "\r\n\r\n";
+            File.AppendAllText(Path.Combine(dir, "error.log"), line, Encoding.UTF8);
+        }
+        catch { }
+    }
+
+    static async void OnFormLoad(object sender, EventArgs e)
+    {
+        try
+        {
+            // 直接用默认环境初始化（最简、最稳）
+            await g_web.EnsureCoreWebView2Async(null);
+
+            g_web.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            g_web.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            g_web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            g_web.CoreWebView2.Settings.IsZoomControlEnabled = true;
+
+            g_web.Source = new Uri(g_url);
+        }
+        catch (Exception ex)
+        {
+            LogError("WebView2Init", ex);
+            MessageBox.Show(
+                "无法启动内嵌页面。\n\n详细信息已写入日志：\n%LOCALAPPDATA%\\DaoShengTree\\error.log\n\n" +
+                ex.GetType().Name + ": " + ex.Message,
+                AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    [STAThread]
+    static void Main()
+    {
+        EnableDpiAwareness();          // 必须在创建任何窗口前调用
+
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+
+        string ip = GetWslIp();
+        EnsureServer();
+
+        // 等待服务就绪（最多约 16 秒）
+        for (int i = 0; i < 40 && !PortOpen(ip, Port); i++) Thread.Sleep(400);
+
+        g_url = "http://" + ip + ":" + Port + "/";
+
+        Form form = new Form();
+        form.Text          = AppTitle;
+        form.Width         = 1320;
+        form.Height        = 880;
+        form.MinimumSize   = new Size(720, 480);
+        form.StartPosition = FormStartPosition.CenterScreen;
+        form.BackColor     = Color.FromArgb(244, 241, 236);
+
+        g_web = new WebView2();
+        g_web.Dock = DockStyle.Fill;
+        form.Controls.Add(g_web);
+        form.Load += OnFormLoad;
+
+        Application.Run(form);
+    }
+}
