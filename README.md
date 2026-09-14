@@ -571,7 +571,8 @@ console.log("✓ 已写回");'
 - 备用通道（HTTPS 走 Watt Toolkit 加速器，**需要 token，那枚已作废**，仅留档）：
   Watt Toolkit 会把 `github.com` 写进 Windows hosts 指向 `127.0.0.1`，而 **WSL 里的 `127.0.0.1` 是 WSL 自己**，
   所以 WSL 直接走 HTTPS 必然失败。当时的解法：转发脚本 `~/.config/arborinversa/github-relay.js`
-  （只把 github 系域名送到 `172.19.32.1:443` 的加速器）＋ 加速器根证书
+  （只把 github 系域名送到 WSL 网段网关的 443 端口 —— 即 Windows 主机地址，
+  `ip route | grep default` 可查 —— 那儿是加速器）＋ 加速器根证书
   `~/.config/arborinversa/steamtools-ca.pem`（中间人签发者 `CN=SteamTools Certificate / O=BeyondDimension`）
   ＋ `sh ~/.config/arborinversa/gh.sh push`（脚本自己用 `-c http.proxy=…` 传入，
   **不依赖仓库 local 配置**；推时 Watt Toolkit 必须开着）
@@ -635,7 +636,7 @@ cd /home/elu/test/doc-tool/daosheng-tree/tools
 python3 -c "
 import sys; sys.path.insert(0,'.')
 from pngtool import decode_png, alpha_stats, crop_pad_square, resize_area, write_ico
-w,h,px=decode_png('/mnt/c/Users/大象/Desktop/Etz.png')
+w,h,px=decode_png('/mnt/c/Users/<你的 Windows 用户名>/Desktop/Etz.png')
 side,master=crop_pad_square(w,h,px,alpha_stats(w,h,px)[3],0.04)
 write_ico([(s,resize_area(side,side,master,s,s)) for s in (16,24,32,48,64,128,256)],
           '/mnt/c/ArborInversa/ArborInversa.ico')"
@@ -691,7 +692,7 @@ python3 tools/build_release.py
 | 不含 | 你的任何内容（已换成空树）、`Program.cs`、`mkshortcut.ps1`、`setup.iss`、`.ico`、WebView2 缓存 |
 
 - 试用流程：打开 → 「植树」→「从文件读取」选 `美术史树-试用.txt`（或记事本复制粘贴）→「植树」
-- 痕迹扫描关键词：`大象`／`C:\Users`／`daosheng-tree`／`倒生树`／旧 localStorage 键名 `zhhistory` 等，
+- 痕迹扫描关键词：**本机 Windows 用户名**（脚本现查，不写死）／`C:\Users`／`daosheng-tree`／`倒生树`／旧 localStorage 键名 `zhhistory` 等，
   命中就报出来（`unins000.*` 是装机时才生成的、天然带本机安装路径，已排除）
 - ⚠️ 为躲开「WSL 往 Windows 传中文命令行参数会被编码搞坏」这个坑，外发版**不用 `ISCC /D`**，
   而是由 `win-app/setup.iss` 现场生成一份专用 `.iss`（把 `SrcDir`／`OutputDir` 改写成暂存目录）再编译；
@@ -703,8 +704,8 @@ python3 tools/build_release.py
 
 ```bat
 cd C:\ArborInversa
-"C:\Users\大象\AppData\Local\Programs\Inno Setup 6\ISCC.exe" setup.iss
-:: 产物：C:\Users\大象\Desktop\ArborInversa-Setup-1.0.0.exe
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" setup.iss
+:: 产物：C:\ArborInversa\dist\ArborInversa-Setup-1.0.0.exe
 ```
 
 - 脚本：`win-app/setup.iss`（与应用目录那份同步，改完两边都要更新）

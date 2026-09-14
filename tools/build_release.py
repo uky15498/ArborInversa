@@ -18,12 +18,51 @@ ROOT      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC       = "/mnt/c/ArborInversa"                                      # 本机应用目录（含个人内容）
 STAGE     = "/mnt/c/Users/Public/ArborInversa-release"   # 外发版暂存目录（纯 ASCII，避免命令行传中文路径）
 STAGE_WIN = r"C:\Users\Public\ArborInversa-release"
-ISCC      = "/mnt/c/Users/大象/AppData/Local/Programs/Inno Setup 6/ISCC.exe"
 DIST      = os.path.join(ROOT, "dist")
 VER       = "1.0.0"
 ZIP_OUT   = os.path.join(DIST, f"ArborInversa-{VER}.zip")
 SETUP_OUT = f"ArborInversa-Setup-{VER}.exe"
-DESKTOP   = "/mnt/c/Users/大象/Desktop"
+
+
+def win_user_dir(sub=""):
+    """本机 Windows 用户目录（现查，不在源码里写死用户名）
+
+    `C:\\Users` 下面除了真实用户，还躺着 Default / DefaultAppPool / TEMP 等一堆
+    同样带 NTUSER.DAT 与 Desktop 的目录，光看结构会挑错。所以：
+      ① 优先用「装了 Inno Setup 的那个用户目录」判定（唯一可靠信号）；
+      ② 找不到再退回「系统目录之外、且同时有 NTUSER.DAT 与 Desktop 的目录」；
+      ③ 仍可用环境变量 WINUSER_DIR 直接指定。
+    """
+    import glob
+    env = os.environ.get("WINUSER_DIR")
+    if env:
+        return os.path.join(env, sub) if sub else env
+    for hit in sorted(glob.glob("/mnt/c/Users/*/AppData/Local/Programs/Inno Setup 6/ISCC.exe")):
+        prof = hit.split("/AppData/Local/")[0]
+        return os.path.join(prof, sub) if sub else prof
+    base = "/mnt/c/Users"
+    skip = {"Public", "Default", "Default User", "All Users", "WDAGUtilityAccount",
+            "AppData", "TEMP", "desktop.ini"}
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        names = []
+    for n in names:
+        p = os.path.join(base, n)
+        if n in skip or not os.path.isdir(p):
+            continue
+        if not (os.path.exists(os.path.join(p, "NTUSER.DAT")) and
+                os.path.isdir(os.path.join(p, "Desktop")) and
+                os.path.isdir(os.path.join(p, "AppData", "Local"))):
+            continue
+        return os.path.join(p, sub) if sub else p
+    return None
+
+
+WINUSER = win_user_dir()                                   # 例：/mnt/c/Users/<用户名>
+ISCC    = os.path.join(WINUSER, "AppData/Local/Programs/Inno Setup 6/ISCC.exe") if WINUSER \
+          else "/mnt/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+DESKTOP = os.path.join(WINUSER, "Desktop") if WINUSER else "/mnt/c/Users/Public/Desktop"
 
 # 外发版的数据 ＝ 仓库根目录那棵空框架树（不含任何个人内容，只留一句引导）
 FRAMEWORK_DATA = os.path.join(ROOT, "data.json")
@@ -33,7 +72,9 @@ BIN = ["ArborInversa.exe", "ArborInversa.exe.config", "index.html",
        "WebView2Loader.dll"]
 
 # 个人痕迹扫描用的关键词（出现在外发文件里就要报出来）
-TRACE = ["大象", "C:\\Users", "c:\\Users", "DaoShengTree", "daosheng", "倒生树",
+# 本机 Windows 用户名由 win_user_dir() 现查，不写死在源码里
+TRACE = ([os.path.basename(WINUSER)] if WINUSER else []) + \
+        ["C:\\Users", "c:\\Users", "DaoShengTree", "daosheng", "倒生树",
          "AppData", "Desktop", "zhhistory", "@gmail", "@qq.com", "@163.com"]
 
 
@@ -87,7 +128,7 @@ def main():
     if os.path.exists(ISCC):
         iss = io.open(os.path.join(ROOT, "win-app", "setup.iss"), encoding="utf-8-sig").read()
         iss = iss.replace('#define SrcDir "C:\\ArborInversa"', f'#define SrcDir "{STAGE_WIN}"')
-        iss = iss.replace("OutputDir=C:\\Users\\大象\\Desktop", f"OutputDir={STAGE_WIN}")
+        iss = iss.replace("OutputDir=dist", f"OutputDir={STAGE_WIN}")
         # 图标不在暂存目录里（绿色版不需要它），指向本机那份即可
         iss = iss.replace("SetupIconFile={#SrcDir}\\ArborInversa.ico",
                           "SetupIconFile=C:\\ArborInversa\\ArborInversa.ico")
