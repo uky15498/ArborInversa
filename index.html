@@ -735,11 +735,23 @@ function collectInlineProps(){
 }
 async function saveInlineProps(){
   const n=nodeAt(curPath)||DATA;
+  const cur=propsOf(n)||{};
+  // 值被清空的行 → 还原成原值，不当作删除（要删除请点「删」按钮）
+  let reverted=false;
+  document.querySelectorAll("#detail .prow").forEach(r=>{
+    const kEl=r.querySelector(".pkey"); if(!kEl) return;
+    const k=kEl.value.trim(), vEl=r.querySelector(".pval");
+    if(k && !vEl.value.trim() && cur[k]!==undefined){
+      vEl.value=Array.isArray(cur[k])? cur[k].join('，') : String(cur[k]);
+      reverted=true;
+    }
+  });
   const r=collectInlineProps();
   if(Object.keys(r.props).length) n.props=r.props; else delete n.props;
   const ok=await save();
   fillDatalists();
-  toast(ok? "属性已保存" : "属性保存失败");
+  if(reverted) toast("属性值不能为空 —— 已还原（要删除请点「删」）");
+  else toast(ok? "属性已保存" : "属性保存失败");
   if(r.structural||propDraft){ propDraft=false; renderDetail(); }
 }
 function bindPropPanel(){

@@ -135,6 +135,8 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 | `tools/codec.test.js` | **树 ⇄ 文本代码**自测（从 `index.html` 抽真实实现来跑，28 项） |
 | `tools/search.test.js` | **搜索 与 枝属性**自测（同样抽真实实现，45 项） |
 | `tools/seed_props.js` | **按统一规则给全部枝补属性**（可复跑；`--write` 才写盘，首次自动备份） |
+| `tools/snapshot.js` | **把应用版 `data.json`／`media/` 校验后快照进库**（`--check` 只检查一致性） |
+| `tools/git-hooks/pre-commit` | 提交前自检：两套自测 + 内容快照一致性（`core.hooksPath` 指向它） |
 | `tools/make_trial_code.js` | 由当前数据生成**试用代码文档**（外发版用） |
 | `tools/build_release.py` | **一键出外发版**：空树数据＋试用代码＋zip＋安装包＋痕迹扫描 |
 | `win-app/使用说明-外发版.txt` | 外发版随包的《使用说明.txt》源文件 |
@@ -147,11 +149,14 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 - **唯一维护版 ＝ 应用版**：`C:\ArborInversa\data.json` —— **今后所有内容改动只写这一份**
 - 用应用内「就地编辑」修改时，会自动写回该文件（**写出的是单行压缩 JSON**，
   故看到 1 行的 `data.json` 属正常，那是应用写的）
-- 源码目录里的 `data.json` **已冻结为 2026-09-14 11:25 的旧快照**
-  （2 空格缩进、根名仍是旧名「倒生树」、根「概述」是旧长文案）
-  —— **不要再同步它，也不要拿它覆盖应用版**
-- 备份一律存源码目录：
-  `cp /mnt/c/ArborInversa/data.json /home/elu/test/doc-tool/daosheng-tree/data.before-<改动名>.json`
+- 源码目录里的 `data.json` 是**由 `tools/snapshot.js` 从应用版同步进来的快照**（2026-09-14 起），
+  供 git 记录内容历史；**方向只有一个：应用版 → 库内**，**永远不要拿库内那份覆盖应用版**
+- 同步（改完内容、提交前跑一次；会先校验 JSON／`[[跳转]]`／属性值类型，并拒绝把外发版空树写进库）：
+  ```bash
+  node tools/snapshot.js          # 校验 + 同步 data.json 与 media/
+  node tools/snapshot.js --check  # 只检查是否一致（pre-commit 钩子用的就是它）
+  ```
+- 手工备份 `data.before-*.json` 是 git 接管**之前**的做法，今后不必再生成（git 里已有逐次提交）
 
 ---
 
@@ -585,6 +590,27 @@ at(["中国美术史","两宋","绘画","山水"]).leaves[0].desc="新内容";
 fs.writeFileSync(P,JSON.stringify(d,null,2),"utf8");
 console.log("✓ 已写回");'
 ```
+
+### 版本管理（git，2026-09-14 建立）
+
+- **仓库就在源码目录**：`/home/elu/test/doc-tool/daosheng-tree/.git`（本地库，分支 `main`）
+  —— ⚠️ **不要**在上级 `/home/elu/test` 上 init（那里有课表、视频等无关文件）
+- 身份：`user.name=elu`／`user.email=elu@localhost`（仅本仓库；将来推远端时改成对应账号邮箱）
+- **提交前自检钩子**（已启用 `core.hooksPath=tools/git-hooks`）：自动跑
+  `codec.test.js` → `search.test.js` → `snapshot.js --check`，任一不过就中止提交
+- **`.gitignore` 取舍**：
+  - 不进库：`dist/`（安装包与 zip，可由脚本重建）、`__pycache__/`、`*.pyc`、`serve.log`、`*.WebView2/`、系统垃圾
+  - **必须进库**：三个 WebView2 DLL、`ArborInversa.ico`、`Etz.png`、`setup.iss`（缺了别人编不出 exe）
+  - `data.before-*.json` 作为「git 之前的历史档案」**故意保留在库内**
+- **日常流程**：改内容 → `node tools/snapshot.js` → 跑自测 → `git commit`
+- **发布打标签**：`git tag -a v1.0.0 -m "…"`；产物由 `python3 tools/build_release.py` 从当前工作区重建，
+  所以**打包前先提交**，让 tag 与 `dist/` 内容对得上
+- **远端**：实测本机 **github.com 不通**（443 拒连），**gitee.com / gitcode.com 通**且 `git ls-remote` 正常；
+  将来要上云就推 Gitee 私有库：
+  ```bash
+  git remote add origin https://gitee.com/<你的账号>/arbor-inversa.git
+  git push -u origin main --tags
+  ```
 
 ### 校验（改完必做）
 
