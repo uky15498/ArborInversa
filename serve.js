@@ -1,4 +1,4 @@
-// 中国美术史·导图 后端 —— 页面/数据读写 + 图片(media/)上传与访问
+// ArborInversa（逆生树）备用后端 —— 页面/数据读写 + 图片(media/)上传与访问
 // 用法: node serve.js [端口]   (默认 8460)
 const http = require("http");
 const fs = require("fs");

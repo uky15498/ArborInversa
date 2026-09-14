@@ -2,7 +2,9 @@
 
 > **类型备注：树型思维导图**（tree-style mind map）
 > 本文档供人与新会话（新的 AI 对话）快速、无缝接手本项目。
-> 文档版本：2026-09-14
+> 文档版本：2026-09-15
+> 仓库 ＝ **纯框架**：只放框架本身，不含任何内容（内容由你自己的应用目录维护）
+> 许可：**非商业**（个人学习／研究／教学／非营利可用，商业用途需授权）—— 见第十二节
 > 应用目录：`C:\ArborInversa\`　　｜　　源码/文档目录：`/home/elu/test/doc-tool/daosheng-tree/`
 
 ---
@@ -40,34 +42,35 @@
 └ 书法
 ```
 
-> ★ **仓库自带的是空框架树；一棵真实的示例树（中国美术史，含结构大纲、完整文本代码与写作规范）见 [示例](示例.md)。**
+> ★ **仓库里不放内容**：仓库那份 `data.json` 是**空框架树**（只有根「逆生树」＋一句引导），
+> clone 下来即可直接跑这套框架。
 
 - **层级**：根下直接抽出的枝 ＝ 分支树（可平行挂多棵）；分支树下的枝再按需要分层，层数不限
-- **规模**：仓库自带的 `data.json` 是**空框架树**；示例树的规模见 [示例](示例.md)
+- **规模**：仓库那份空框架树 402 字节（仅根 ＋ 一片引导叶）；你自己那份内容的规模用
+  `node tools/check_data.js` 打印（枝／叶／属性／链接）
 - **数据字段**：枝 ＝ `{name, props?, leaves, children}`；叶 ＝ `{name, desc}` —— 仅此两种
 - **叶里的两种标记**：`[[枝名]]` 生成跳转；`![[图片名]]` 插图，可带题注 `![[图片名|题注]]`
 
 ### 内容放在哪
 
-分三层看，**框架与内容分开**：
+**框架与内容彻底分开 —— 仓库里一点内容都没有**：
 
-1. **框架**（与内容无关）：`index.html`／`ArborInversa.exe`／`serve.js`／`tools/` —— 界面、内置服务、植树与搜索、工具脚本
-2. **仓库自带的 `data.json` ＝ 空框架树**：只有根「逆生树」＋一句引导语；**clone 下来即可直接跑这套框架**
-3. **谁的实际内容**：
-   - **你的内容**：`C:\ArborInversa\data.json` —— **不进仓库**（是唯一维护版，见下节）
-   - **美术史的示例版本**：仓库里的 [`示例.md`](示例.md)（它长什么样 ＋ 真代码样例 ＋ 完整文本代码 ＋ 写作规范 ＋ 属性规则 ＋ 进度与待办；**生成物，不要手改**）
-   - 外发版软件包照旧**带完整美术史**（随包的试用代码，见第九节「打包发布」）
+| 层 | 在哪 | 说明 |
+|---|---|---|
+| **① 框架** | 仓库 | `README.md`／`LICENSE.md`／`index.html`／`serve.js`／`tools/`／`win-app/`／`data.json`（空框架树）。clone 下来就是一套能跑的框架 |
+| **② 你的内容** | `C:\ArborInversa\data.json` | **唯一维护版**，应用内编辑写回此文件；**不进仓库** |
+| **③ 内容给别人看** | 随软件包的《美术史树-试用.txt》 | 由 `tools/make_trial_code.js` 从应用数据实时生成，绿色版与安装包都带它 —— 想要成品的人导这一份即可，仓库里不必再放一份 |
 
-| 文件 | 是什么 |
+| 仓库里的文件 | 是什么 |
 |---|---|
-| `data.json` | 内容（枝、叶、属性）：仓库那份是**空框架树**，应用目录那份是你的内容 |
+| `data.json` | **空框架树**（根「逆生树」＋一句引导语），供 clone 后直接跑框架 |
 | `index.html` | 界面（含全部 CSS／JS，无外部依赖） |
-| `media/` | 插图 |
-| `ArborInversa.exe` | Windows 主程序（内置 HTTP 服务 ＋ WebView2 窗口） |
-| `使用说明.txt` | 给最终用户的说明 |
+| `serve.js` | 备用 Node 后端（接口与 exe 内置服务一致） |
+| `tools/` | 自测、自检、试用代码生成、图标与打包脚本 |
+| `win-app/` | Windows 应用源码、图标、安装包脚本、外发版说明 |
 
 - **应用目录（你的内容正本）**：`C:\ArborInversa\`（可用应用内编辑，也可直接改文件）
-- **源码／文档／备份**：`/home/elu/test/doc-tool/daosheng-tree/`（含 `win-app/Program.cs`、`tools/`、`README.md`、`示例.md`）
+- **源码／文档**：`/home/elu/test/doc-tool/daosheng-tree/`
 - **远端仓库**：`https://github.com/uky15498/ArborInversa`（私有）
 
 ### 能做什么
@@ -125,8 +128,9 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 | `使用说明.txt` | 给最终用户的说明（绿色版与安装版通用；打包与安装包都带它） |
 | `ArborInversa.exe.config` | 高 DPI 配置 |
 | `index.html` | **前端页面**（含全部 CSS/JS，无外部依赖） |
-| `data.json` | **全部内容**（约 56 KB；**唯一维护版**，应用内编辑会写回此文件） |
+| `data.json` | **你的全部内容**（**唯一维护版**，应用内编辑会写回此文件） |
 | `media/` | **图片目录**（随文件夹一起打包带走） |
+| `内容快照-旧备份/` | git 之前的手工内容备份（11 个 `data.*.json`；**不在仓库里、也不进安装包**，可删） |
 | `WebView2Loader.dll` | WebView2 原生依赖（**32 位，必需**） |
 | `Microsoft.Web.WebView2.Core.dll`<br>`Microsoft.Web.WebView2.WinForms.dll` | WebView2 托管程序集 |
 | `mkshortcut.ps1` | 重建桌面快捷方式 |
@@ -138,46 +142,43 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 | 文件 | 作用 |
 |---|---|
 | `README.md` | 本文档 |
-| `示例.md` | **美术史示例页**（生成物，**不要手改**）：它长什么样 ＋ 真代码样例 ＋ 完整文本代码 ＋ 写作规范 ＋ 元代范式 ＋ 属性规则 ＋ 进度与待办（由 `tools/make_example_page.js` 生成） |
+| `LICENSE.md` | **许可**（PolyForm Noncommercial 1.0.0，见第十二节） |
 | `index.html` | 前端源码（改完需 `cp` 到应用目录） |
-| `data.json` | **空框架树**（仓库自带，供 clone 后直接跑框架；**不含任何个人内容**） |
-| `media/` | 图片源 |
+| `data.json` | **空框架树**（仓库自带，供 clone 后直接跑框架；**不含任何内容**） |
 | `serve.js` | 备用 Node 后端 |
+| `tools/check_data.js` | **内容自检**：仓库 `data.json` 必须是空框架树 ＋ 校验应用数据的 JSON／叶／属性值类型／`[[跳转]]` |
+| `tools/codec.test.js` | **树 ⇄ 文本代码**自测（从 `index.html` 抽真实实现来跑，28 项） |
+| `tools/search.test.js` | **搜索 与 枝属性**自测（同样抽真实实现，45 项） |
+| `tools/codec-from-html.js` | 供工具复用 `index.html` 里的编解码实现 |
+| `tools/make_trial_code.js` | 由应用数据生成**《美术史树-试用.txt》**（外发版随包） |
+| `tools/seed_props.js` | 按统一规则给应用数据里的枝补属性（可复跑，`--write` 才写盘） |
+| `tools/pngtool.py` | **纯标准库** PNG 解码／缩放／ICO 生成脚本（本机无 ImageMagick、无 Pillow） |
+| `tools/build_release.py` | **一键出外发版**：空树数据＋试用代码＋zip＋安装包＋痕迹扫描 |
+| `tools/git-hooks/pre-commit` | 提交前自检：两套自测 ＋ `node tools/check_data.js --repo-only` |
 | `win-app/Program.cs` | Windows 应用源码 |
 | `win-app/旧版-依赖WSL.cs.bak` | 早期依赖 WSL 的版本（留档） |
 | `win-app/ArborInversa.ico` | 程序图标（与 `C:\ArborInversa\` 那份同源） |
-| `win-app/Etz.png` | **图标原始图**（用户提供的 `Etz.png`，515×421 RGBA） |
-| `tools/pngtool.py` | **纯标准库** PNG 解码／缩放／ICO 生成脚本（本机无 ImageMagick、无 Pillow） |
-| `tools/codec.test.js` | **树 ⇄ 文本代码**自测（从 `index.html` 抽真实实现来跑，28 项） |
-| `tools/search.test.js` | **搜索 与 枝属性**自测（同样抽真实实现，45 项） |
-| `tools/seed_props.js` | **按统一规则给全部枝补属性**（示例树用的属性规则；可复跑，`--write` 才写盘，首次自动备份） |
-| `tools/snapshot.js` | **校验应用数据 → 同步 `media/` → 重新生成 `示例.md` → 核对仓库 `data.json` 仍是空框架树**（`--check` 只检查） |
-| `tools/make_example_page.js` | 由应用数据生成 [`示例.md`](示例.md)（只重生成示例页） |
-| `tools/git-hooks/pre-commit` | 提交前自检：两套自测 + `node tools/snapshot.js --check`（`core.hooksPath` 指向它） |
-| `tools/make_trial_code.js` | 由当前数据生成**试用代码文档**（外发版用） |
-| `tools/build_release.py` | **一键出外发版**：空树数据＋试用代码＋zip＋安装包＋痕迹扫描 |
-| `win-app/使用说明-外发版.txt` | 外发版随包的《使用说明.txt》源文件 |
+| `win-app/Etz.png` | **图标原始图**（515×421 RGBA） |
 | `win-app/setup.iss` | **安装包**脚本（Inno Setup 6） |
-| `dist/` | **发布产物**：绿色版 zip、安装包 exe |
-| `data.backup.json`<br>`data.before-*.json` | **历史备份**（10 个，见第九节回退方法） |
+| `win-app/使用说明-外发版.txt` | 外发版随包的《使用说明.txt》源文件 |
+| `dist/` | **发布产物**（不进库，可由脚本重建）：绿色版 zip、安装包 exe |
 
-### ★ 内容以哪一份为准（2026-09-14 用户确立）
+### ★ 内容以哪一份为准
 
-- **唯一维护版 ＝ 应用版**：`C:\ArborInversa\data.json` —— **今后所有内容改动只写这一份**
-- 用应用内「就地编辑」修改时，会自动写回该文件（**写出的是单行压缩 JSON**，
+- **仓库只放框架，不放内容**：仓库那份 `data.json` 就是**空框架树**，clone 下来即可跑框架
+- **唯一维护版 ＝ 应用版**：`C:\ArborInversa\data.json` —— **所有内容改动只写这一份**
+- 用应用内「就地编辑」修改时会自动写回该文件（**写出的是单行压缩 JSON**，
   故看到 1 行的 `data.json` 属正常，那是应用写的）
-- **仓库不再收你的内容**：仓库里的 `data.json` 是**空框架树**（clone 即可跑框架），
-  你的内容不进库；美术史那一棵以 [`示例.md`](示例.md) 的形式进库，由 `tools/make_example_page.js` 生成
-  —— **`示例.md` 是生成物，不要手改**（手改了 `--check` 会报不一致）
-- 同步（改完内容、提交前跑一次；会先校验 JSON／`[[跳转]]`／属性值类型，再同步 `media/`、
-  重新生成示例页，并核对仓库 `data.json` 仍是空框架树）：
-  ```bash
-  node tools/snapshot.js          # 校验应用数据 → 同步 media/ → 重新生成 示例.md → 核对仓库 data.json 是空框架树
-  node tools/snapshot.js --check  # 只检查（pre-commit 钩子跑的就是它）
-  node tools/make_example_page.js # 只重新生成 示例.md
-  ```
+- **内容给别人看**：只随软件包发《美术史树-试用.txt》，由 `tools/make_trial_code.js` 从应用数据实时生成；
+  仓库与 git 历史里都没有内容
+- **git 之前的手工内容备份**已移到 `C:\ArborInversa\内容快照-旧备份\`（11 个文件，不在仓库里、也不进安装包）
 - ⚠️ **永远不要拿仓库那份 `data.json` 覆盖应用版** —— 仓库那份是**空树**，覆盖了就把内容丢了
-- 手工备份 `data.before-*.json` 是 git 接管**之前**的做法，今后不必再生成（git 里已有逐次提交）
+- 自检（改完内容、提交前跑一次）：
+  ```bash
+  node tools/check_data.js              # ① 仓库 data.json 是空框架树  ② 校验应用数据
+  node tools/check_data.js --repo-only  # 只跑 ①（换台机器、手头没有应用数据时用）
+  node tools/check_data.js --data <文件> # 也可以指定别处的应用数据
+  ```
 
 ---
 
@@ -185,7 +186,7 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 
 ### 结构
 
-以示例树里的「两宋」为例（整棵数据、完整代码与属性规则见 [`示例.md`](示例.md)）：
+下面是一棵树的片段（以「两宋」为例，枝名任取）：
 
 ```json
 {
@@ -216,8 +217,8 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 - **叶的字段**：`name`（叶名）、`desc`（叶的内容）—— 仅此两种
 - 层级约定：
   - **根** ＝ 逆生树（框架本体）
-  - **根的直接子枝** ＝ **分支树**（一个学科／一个主题一棵，可以平行挂多棵；示例树里是「中国美术史」）
-  - **分支树的子枝** ＝ 该分支树的分类（示例树里是它下面的各个时代）
+  - **根的直接子枝** ＝ **分支树**（一个学科／一个主题一棵，可以平行挂多棵）
+  - **分支树的子枝** ＝ 该分支树的分类，再往下按需要分层
 - ★ **属性 `props`**（2026-09-14 加入，参考 **Obsidian 的 Properties**）：
   - 形如 `{"键": "文本"}` 或 `{"键": ["值一", "值二"]}` —— 值**只能是文本或文本数组**
   - **可选字段**：没有属性就不写该字段；值为空的行不写入（`propsOf()` 按「空对象＝没有属性」处理）
@@ -227,11 +228,12 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
   - 搜索：属性键与属性值**都参与全文检索**，并支持 `键:值` 筛选语法（见第五节「搜索」）
   - 植树代码：`属性 键: 值` 行（见第五节「植树」）
 
-- 属性这一层**与内容无关**；示例树实际用的键、生成规则与条数见 [`示例.md`](示例.md)
+- 属性这一层**与内容无关**：键与值都自由定义；你自己那份数据用了哪些键、一共多少条，
+  跑 `node tools/check_data.js` 会一并打印
 - **值类型铁律**：单值写成**文本**，多值写成**数组**；**不要写单元素数组**（编解码会把它还原成文本，
   自测里有这条断言）
-- 示例树那套属性由 `tools/seed_props.js` 按统一规则补（可复跑；`--write` 才写盘，首次自动备份
-  `data.before-props.json`；脚本**只补自己负责的键，手写属性不会被抹掉**）；规则见 [`示例.md`](示例.md)
+- 你那份数据里的属性可以由 `tools/seed_props.js` 按统一规则补（可复跑；`--write` 才写盘；
+  脚本**只补自己负责的键，手写属性不会被抹掉**）
 - 属性栏里的**常用属性名／常用值**由 `PROP_KINDS`／`PROP_VALUES` 定义（按「类别」分组），
   自测会检查「数据里出现的每种类型都有对应的常用属性表」
 
@@ -296,7 +298,7 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 - **一键转语法**：限定栏下方实时显示等价语法，点一下即可把条件转进关键词框（想微调时很方便）
 - **属性开箱可用**：候选键与候选值都由数据里已有的属性现算（下拉直接列出来），
   所以属性维度**开箱可用**，例如「在枝下＝某个分类 ＋ 属性 类型＝画家」；
-  示例树用的属性键与条数见 [`示例.md`](示例.md)，写法见第四节「★ 属性 `props`」
+  写法见第四节「★ 属性 `props`」
 
 #### 关键词语法（高级通道）
 
@@ -323,8 +325,8 @@ echo "http://$(hostname -I | awk '{print $1}'):8460/"
 - 实现全在 `index.html` 的 `==== 搜索 BEGIN / END ====` 区块：`sTokens()`／`rowsToTokens()`（词条）
   → `runQuery()`（范围 + 并行规则 + 打分排序）→ `highlight()`／`snippetAround()`；
   限定栏的候选值由 `allPropKeys()`／`allPropVals()`／`allBranches()` 从数据里现算
-- **故意不建索引**：每次输入 120ms 防抖后**全量扫描**，量级不大时是毫秒级
-  （示例树那一棵：260 余个单位、1.5 万字，规模见 [示例](示例.md)）；结果最多显示前 200 条
+- **故意不建索引**：每次输入 120ms 防抖后**全量扫描**；个人量级的数据是毫秒级
+  （规模用 `node tools/check_data.js` 打印）；结果最多显示前 200 条
 - **自测（改完搜索引擎务必跑）**：`node tools/search.test.js` —— 覆盖语法解析、各字段语法、
   AND／排除／短语、**范围限定**、`含:` 维度、**条件行映射**、**并且/或者**、属性筛选、高亮转义、
   片段截断、排序与跳转路径，当前 **45 项全通过**
@@ -489,8 +491,6 @@ cd /home/elu/test/doc-tool/daosheng-tree && node tools/codec.test.js
 
 - 更细的语法与报错行为见第五节「植树 · 树的文本代码」；面向 ai 的说明书由植树弹窗
   「告诉 ai 怎么帮你写」一键给出
-- **示例树（中国美术史）自己遵循的写作规范** —— 那一棵树的枝怎么分层、每枝挂哪几片叶、
-  叶里写什么文体、脉络怎么连 —— 见 [示例](示例.md)
 
 ---
 
@@ -510,7 +510,7 @@ cd /home/elu/test/doc-tool/daosheng-tree && node tools/codec.test.js
 5. **文字发虚 = 缺 DPI 感知**：不声明 DPI 感知的程序会被系统位图拉伸（图片看不出，文字很明显）。
    已在代码里声明 PerMonitorV2。
 6. **WSL IP 会变**：重启 WSL 后需重新 `hostname -I`（仅备用形态需要）。
-7. **中文文件名可用**（`media/示例-汝窑天青釉.svg` 已验证），但 URL 需转义。
+7. **图片用中文文件名可用**（在 `media/` 里放中文名图片已验证），但 URL 需转义。
 8. 系统 Python 3.14 无 pip／编译器 —— 本项目纯 Node / 纯 C#，不受影响。
 9. **Windows 应用本体不依赖 npm 包**，也不用 `node_modules`，可任意目录迁移。
 
@@ -550,12 +550,12 @@ console.log("✓ 已写回");'
   —— ⚠️ **不要**在上级 `/home/elu/test` 上 init（那里有课表、视频等无关文件）
 - 身份：`user.name=elu`／`user.email=elu@localhost`（仅本仓库；将来推远端时改成对应账号邮箱）
 - **提交前自检钩子**（已启用 `core.hooksPath=tools/git-hooks`）：自动跑
-  `codec.test.js` → `search.test.js` → `snapshot.js --check`，任一不过就中止提交
+  `codec.test.js` → `search.test.js` → `check_data.js --repo-only`，任一不过就中止提交
 - **`.gitignore` 取舍**：
   - 不进库：`dist/`（安装包与 zip，可由脚本重建）、`__pycache__/`、`*.pyc`、`serve.log`、`*.WebView2/`、系统垃圾
   - **必须进库**：三个 WebView2 DLL、`ArborInversa.ico`、`Etz.png`、`setup.iss`（缺了别人编不出 exe）
-  - `data.before-*.json` 作为「git 之前的历史档案」**故意保留在库内**
-- **日常流程**：改内容 → `node tools/snapshot.js` → 跑自测 → `git commit`
+  - **内容不进库**：`data.json` 只有空框架树；`media/` 与内容备份也都不进库
+- **日常流程**：改内容 → `node tools/check_data.js` → 跑自测 → `git commit`
 - **发布打标签**：`git tag -a v1.0.0 -m "…"`；产物由 `python3 tools/build_release.py` 从当前工作区重建，
   所以**打包前先提交**，让 tag 与 `dist/` 内容对得上
 - **远端（2026-09-14 建立）**：`https://github.com/uky15498/ArborInversa`（**私有**）；
@@ -581,34 +581,25 @@ console.log("✓ 已写回");'
 ### 校验（改完必做）
 
 ```bash
-node -e '
-const d=JSON.parse(require("fs").readFileSync("/mnt/c/ArborInversa/data.json","utf8"));
-const names=new Set();let tot=0,leaf=0,props=0,badProp=[];
-(function w(n){tot++;names.add(n.name);leaf+=(n.leaves||[]).length;
- const p=n.props;
- if(p&&typeof p==="object"&&!Array.isArray(p)){Object.keys(p).forEach(k=>{props++;
-   const v=p[k];if(typeof v!=="string"&&!(Array.isArray(v)&&v.every(x=>typeof x==="string")))badProp.push(n.name+"."+k);});}
- (n.children||[]).forEach(w);})(d);
-let links=0,bad=[];
-(function w(n){for(const l of (n.leaves||[])){const t=(l.desc||"").replace(/!\[\[[^\]]+\]\]/g,"");
-for(const m of t.matchAll(/\[\[([^\]]+)\]\]/g)){links++;if(!names.has(m[1]))bad.push(m[1]);}}(n.children||[]).forEach(w);})(d);
-console.log("枝:",tot,"| 叶:",leaf,"| 链接:",links,"| 无效链接:",bad.length?[...new Set(bad)].join(","):"无",
- "| 属性:",props,badProp.length?("（值类型有误: "+badProp.join(",")+"）"):"");'
+node tools/check_data.js              # ① 核对仓库 data.json 是空框架树  ② 校验应用数据
+node tools/check_data.js --repo-only  # 只跑 ①（换台机器、手头没有应用数据时用）
 ```
 
-### 回退到某个历史版本
+会打印规模（枝／叶／属性／链接），并报出无效的 `[[跳转]]`、非法的属性值类型。
+
+### 回退到某个历史版本（内容备份）
+
+git 接管**之前**的手工内容备份已移到应用目录下：`C:\ArborInversa\内容快照-旧备份\`（11 个文件，**不在仓库里、也不进安装包**）。
 
 ```bash
-cp /home/elu/test/doc-tool/daosheng-tree/data.before-XXX.json /mnt/c/ArborInversa/data.json
+cp "/mnt/c/ArborInversa/内容快照-旧备份/data.before-yuan.json" /mnt/c/ArborInversa/data.json
 ```
 
-可用备份（源码目录内）：`data.backup.json`（最早期）、
-`data.before-leaves.json`（引入叶之前）、`data.before-era-leaves.json`（配三叶之前）、
-`data.before-mq-split.json`（拆分明清前）、`data.before-image.json`（插图前）、
-`data.before-yuan.json`（补元代内容前）、`data.before-yuanfig.json`（加元代画家前）、
-`data.before-daosheng.json`（改组为逆生树前）、
-`data.before-overview.json`（改根「概述」为新名前，即改名后的应用版原样）、
-`data.before-uiwording.json`（界面文案统一前）、
+可用备份：`data.backup.json`（最早期）、`data.before-leaves.json`（引入叶之前）、
+`data.before-era-leaves.json`（配三叶之前）、`data.before-mq-split.json`（拆分明清前）、
+`data.before-image.json`（插图前）、`data.before-yuan.json`（补元代内容前）、
+`data.before-yuanfig.json`（加元代画家前）、`data.before-daosheng.json`（改组为逆生树前）、
+`data.before-overview.json`（改根「概述」为新名前）、`data.before-uiwording.json`（界面文案统一前）、
 `data.before-props.json`（统一补属性前）
 
 ### 重新编译 Windows 应用（★ 在 Windows 侧执行）
@@ -648,9 +639,9 @@ write_ico([(s,resize_area(side,side,master,s,s)) for s in (16,24,32,48,64,128,25
 
 ### 打包发布（2026-09-14）
 
-分两套：**本机自用版**（含你的美术史内容）与 **外发版**（不含任何个人内容，随包一份试用代码）。
-**外发版的空树里不放美术史，但随包的那份试用代码就是完整美术史** —— 别人下载软件照样能拿到全部内容
-（仓库里则以 [示例](示例.md) 的形式公开同一棵树）。
+分两套：**本机自用版**（含你的内容）与 **外发版**（空树 ＋ 随包一份试用代码）。
+**外发版的空树里不放美术史，但随包的那份试用代码就是完整美术史** —— 别人下载软件照样能拿到全部内容；
+仓库里既不装内容，也不再另放一份。
 
 产物都在 `dist/`，桌面也各放一份。
 
@@ -688,7 +679,8 @@ python3 tools/build_release.py
 |---|---|
 | `data.json` | **空树**：只有根「逆生树」＋一句引导语（「这是一棵空树 —— 点上方『植树』…」） |
 | `美术史树-试用.txt` | **由当前数据实时生成**的「中国美术史」整棵树代码（当前 **121 枝／141 叶／1,146 行／69,730 字节**）；UTF-8 带 BOM、CRLF，记事本可直接打开 |
-| `使用说明.txt` | 用 `win-app/使用说明-外发版.txt`（首节就写「第一次打开：先种一棵树」的三步操作） |
+| `使用说明.txt` | 用 `win-app/使用说明-外发版.txt`（首节就写「第一次打开：先种一棵树」的三步操作；末节写明许可） |
+| `LICENSE.md` | **许可全文**（PolyForm Noncommercial 1.0.0）—— 分发二进制时必须随包带上 |
 | 不含 | 你的任何内容（已换成空树）、`Program.cs`、`mkshortcut.ps1`、`setup.iss`、`.ico`、WebView2 缓存 |
 
 - 试用流程：打开 → 「植树」→「从文件读取」选 `美术史树-试用.txt`（或记事本复制粘贴）→「植树」
@@ -729,15 +721,15 @@ cp /home/elu/test/doc-tool/daosheng-tree/index.html /mnt/c/ArborInversa/index.ht
 
 ## 十、待办 / 可扩展方向
 
-**内容层面**的待办（示例树里哪些枝干还没梳理好）见 [示例](示例.md)；这里是**框架与仓库**层面的：
+以下是**框架与仓库**层面的待办（内容层面的事只在你自己的应用数据里）：
 
 - [ ] 逆生树根下挂接**其它分支树**（框架已支持，尚无第二棵）
 - [ ] 可选：叶内图片的尺寸／对齐控制（如 `![[图|题注|300]]` 指定宽度、图文并排）
 - [x] 应用图标（2026-09-14 完成：`Etz.png` → 7 尺寸 ico，已内嵌 exe）
 - [x] **枝属性（`props`，参考 Obsidian Properties）＋ 详情页属性栏 ＋
-  全文搜索 ＋ 限定栏（条件行）（2026-09-14 完成；示例树用的属性规则与条数见 [示例](示例.md)）**
+  全文搜索 ＋ 限定栏（条件行）（2026-09-14 完成）**
 - [x] 安装包与绿色版打包（2026-09-14 完成：`win-app/setup.iss` → Setup.exe；`dist/`）
-- [x] 仓库门面改为**框架为主**：仓库 `data.json` 换成空框架树，美术史内容移入 [示例](示例.md)（2026-09-14）
+- [x] 仓库改为**纯框架**：`data.json` 只放空框架树，内容与历史备份都已移出仓库（2026-09-14／09-15）
 - [ ] 可选：给 exe 加版本元数据（右键属性→详细信息里的版本/产品名/版权）
 - [ ] 可选：代码签名，消除首次运行的 SmartScreen 提示
 
@@ -747,10 +739,20 @@ cp /home/elu/test/doc-tool/daosheng-tree/index.html /mnt/c/ArborInversa/index.ht
 
 > 项目是 **ArborInversa（逆生树）**，一个**树型思维导图**：**竖向的是枝、横向的是叶**，一枝可挂多片叶，
 > 枝上还可带属性（键值对）。结构、字段见第一节。
-> **仓库以框架为主**：仓库自带的 `data.json` 是**空框架树**（clone 下来即可跑框架），
-> 美术史那棵树作为示例放在 [示例](示例.md)（说明、结构大纲、完整文本代码与写作规范都在那里）。
+> **仓库是纯框架**：`data.json` 只放空框架树，clone 下来即可跑框架，**仓库里没有任何内容**。
 > 主交付形态是 Windows 独立应用 `C:\ArborInversa\ArborInversa.exe`（内置 HTTP 服务 ＋ WebView2，
-> 不依赖 WSL／Node，可整体拷走）；**你的内容以 `C:\ArborInversa\data.json` 为准**（唯一维护版，不进仓库），
+> 不依赖 WSL／Node，可整体拷走）；**内容以 `C:\ArborInversa\data.json` 为准**（唯一维护版，**不进仓库**），
+> 给别人看内容就随包发《美术史树-试用.txt》；
 > 源码／文档／工具在 `/home/elu/test/doc-tool/daosheng-tree/`，远端私有库 `github.com/uky15498/ArborInversa`。
-> 改完内容跑 `node tools/snapshot.js` 再提交（提交钩子会跑两套自测，并核对仓库 `data.json` 仍是空框架树）；
-> **不要擅自给示例树里还没梳理好的枝干添枝**。
+> 改完内容跑 `node tools/check_data.js` 再提交（提交钩子会跑两套自测，并核对仓库 `data.json` 仍是空框架树）。
+> 许可：非商业使用免费，商业用途需授权（第十二节）。
+
+---
+
+## 十二、许可（非商业）
+
+本项目采用 **PolyForm Noncommercial License 1.0.0**（见 [`LICENSE.md`](LICENSE.md)）：
+个人学习、研究、教学、非营利组织内部使用等**任何非商业用途**都可自由使用、修改、分发；
+**商业用途需另行获得授权**。
+
+Required Notice: Copyright (c) 2026 elu

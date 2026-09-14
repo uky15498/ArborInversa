@@ -21,5 +21,10 @@ serve.log
 Thumbs.db
 desktop.ini
 
-# 说明：data.before-*.json 是 git 接管前的手工备份（最早期、引入叶之前、配三叶之前…），
-#       作为历史档案**故意保留在库内**；今后有了 git 就不再需要生成新的备份了。
+# 内容文件：仓库只放框架，任何内容数据都不进库
+data.before-*.json
+data.backup.json
+media/
+
+# 说明：本仓库＝框架（README ＋ 前端 ＋ 后端 ＋ 工具 ＋ 空框架树 data.json）。
+#       你的内容正本在应用目录 C:\\ArborInversa\\ ，给别人看内容用随包的《美术史树-试用.txt》。

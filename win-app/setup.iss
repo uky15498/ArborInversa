@@ -1,4 +1,4 @@
-﻿; ArborInversa（逆生树）安装脚本 —— Inno Setup 6
+; ArborInversa（逆生树）安装脚本 —— Inno Setup 6
 ; 编译：ISCC.exe setup.iss
 ; 设计要点：
 ;   · 装到用户目录（{localappdata}\ArborInversa），免管理员、且程序能在自己旁边写 data.json
@@ -59,6 +59,8 @@ Source: "{#SrcDir}\data.json";                 DestDir: "{app}"; Flags: onlyifdo
 Source: "{#SrcDir}\media\*";                   DestDir: "{app}\media"; Flags: onlyifdoesntexist uninsneveruninstall recursesubdirs createallsubdirs
 Source: "{#SrcDir}\使用说明.txt";              DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\美术史树-试用.txt";        DestDir: "{app}"; Flags: ignoreversion
+; 许可：限非商业（PolyForm Noncommercial 1.0.0），随包必须带上
+Source: "{#SrcDir}\LICENSE.md";                DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; WorkingDir: "{app}"

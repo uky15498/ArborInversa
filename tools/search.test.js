@@ -21,6 +21,16 @@ const api = new Function('DATA', escSrc + '\n' + leavesSrc + '\n' + propsSrc + '
   '\nreturn {esc,leavesOf,propsOf,propPairs,propsText,propValText,sTokens,searchUnits,runSearch,' +
   'runQuery,runRows,rowsToTokens,findPathsByName,inPath,isBranchConst,highlight,snippetAround};');
 
+// 这套自测是拿一份**真实内容数据**当夹具的；本仓库只放框架、不含内容，
+// 所以没有数据文件时给出清楚提示并跳过（换台机器跑也不会崩一堆堆栈）
+if (!fs.existsSync(DATA)) {
+  console.log(`· 这套自测需要一份内容数据才能跑（默认找 ${DATA}）。`);
+  console.log('  本仓库只放框架、不含任何内容 —— 指定一份再跑，例如：');
+  console.log('    DATA=/你的/路径/data.json node tools/search.test.js');
+  console.log('  本次：跳过（0 项）');
+  process.exit(0);
+}
+
 const data = JSON.parse(fs.readFileSync(DATA, 'utf8'));
 const S = api(data);                      // 真实数据（当前没有属性）
 const D2 = JSON.parse(JSON.stringify(data));

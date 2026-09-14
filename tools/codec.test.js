@@ -53,6 +53,16 @@ function ok(title, fn) {
   catch (e) { console.log('  ✗ ' + title + '\n      ' + (e && e.message)); fail++; }
 }
 
+// 这套自测是拿一份**真实内容数据**当夹具的；本仓库只放框架、不含内容，
+// 所以没有数据文件时给出清楚提示并跳过（换台机器跑也不会崩一堆堆栈）
+if (!fs.existsSync(DATA)) {
+  console.log(`· 这套自测需要一份内容数据才能跑（默认找 ${DATA}）。`);
+  console.log('  本仓库只放框架、不含任何内容 —— 指定一份再跑，例如：');
+  console.log('    DATA=/你的/路径/data.json node tools/codec.test.js');
+  console.log('  本次：跳过（0 项）');
+  process.exit(0);
+}
+
 const data = JSON.parse(fs.readFileSync(DATA, 'utf8'));
 const st = stats(data);
 console.log(`数据：${DATA}\n     枝 ${st.branches} | 叶 ${st.leaves}\n`);

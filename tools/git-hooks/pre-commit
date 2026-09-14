@@ -1,6 +1,6 @@
 #!/bin/sh
 # 提交前自检（启用方式：git config core.hooksPath tools/git-hooks）
-#   1) 编解码自测  2) 搜索/属性自测  3) 应用版数据是否已快照进库
+#   1) 编解码自测  2) 搜索/属性自测  3) 仓库 data.json 仍是空框架树
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
@@ -10,9 +10,9 @@ node tools/codec.test.js > /dev/null || { echo "× 编解码自测未通过，�
 echo "· 搜索/属性自测…"
 node tools/search.test.js > /dev/null || { echo "× 搜索自测未通过，提交中止"; exit 1; }
 
-echo "· 检查内容快照（示例页 / media / 仓库空框架树）…"
-node tools/snapshot.js --check || {
-  echo "× 内容快照不一致 —— 先跑：node tools/snapshot.js"
+echo "· 检查仓库 data.json（应为空框架树）…"
+node tools/check_data.js --repo-only || {
+  echo "× 仓库 data.json 不是空框架树 —— 仓库只放框架，内容留在应用目录里"
   exit 1
 }
 

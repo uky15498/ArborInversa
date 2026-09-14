@@ -2,22 +2,15 @@
 // 用法：node tools/make_trial_code.js [输出路径]
 //  - 源数据默认 /mnt/c/ArborInversa/data.json（可用环境变量 DATA 覆盖）
 //  - 输出为 UTF-8 带 BOM、CRLF 换行（方便记事本直接打开、复制）
-//  - 抽取的编解码实现来自 index.html 本身，保证与页面里跑的完全一致
+//  - 编解码实现取自 index.html 本身（见 tools/codec-from-html.js），与页面里跑的完全一致
 const fs = require('fs'), path = require('path');
+const { loadCodec } = require('./codec-from-html');
 
-const HTML = path.join(__dirname, '..', 'index.html');
 const SRC = process.env.DATA || '/mnt/c/ArborInversa/data.json';
 const BRANCH = process.env.BRANCH || '中国美术史';
 const OUT = process.argv[2] || path.join(__dirname, '..', 'dist', '美术史树-试用.txt');
 
-const src = fs.readFileSync(HTML, 'utf8');
-const leavesOfSrc = src.match(/function leavesOf\(n\)\{[\s\S]*?\n\}/)[0];
-const a = src.indexOf('// ==== 树 ⇄ 文本代码 BEGIN');
-const b = src.indexOf('// ==== 树 ⇄ 文本代码 END ====');
-if (a < 0 || b < a) throw new Error('index.html 里找不到编解码标记');
-const codec = src.slice(a, b + '// ==== 树 ⇄ 文本代码 END ===='.length);
-const { treeToCode, codeToTree } = new Function(
-  leavesOfSrc + '\n' + codec + '\nreturn {treeToCode,codeToTree};')();
+const { treeToCode, codeToTree } = loadCodec();
 
 const data = JSON.parse(fs.readFileSync(SRC, 'utf8'));
 const node = (data.children || []).find(c => c.name === BRANCH);

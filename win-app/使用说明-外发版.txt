@@ -77,3 +77,9 @@ ArborInversa（逆生树）· 试用版
   · 程序不联网、不需要管理员权限，只在 127.0.0.1 上开一个随机端口给内嵌页面用
   · 窗口与页面名称：ArborInversa（中文名 逆生树）
 
+七、许可（限非商业）
+  · 本软件采用 PolyForm Noncommercial License 1.0.0，全文见随包的 LICENSE.md：
+    个人学习、研究、教学、非营利组织内部使用等非商业用途，都可自由使用、修改、分发；
+    商业用途需另行获得授权
+  · Required Notice: Copyright (c) 2026 elu
+

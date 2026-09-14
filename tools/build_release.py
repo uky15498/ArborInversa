@@ -110,6 +110,8 @@ def main():
     shutil.copy2(os.path.join(ROOT, "win-app", "使用说明-外发版.txt"),
                  os.path.join(STAGE, "使用说明.txt"))
     shutil.copy2(trial, os.path.join(STAGE, "美术史树-试用.txt"))
+    # 许可（限非商业）：随包带上，分发时才合规
+    shutil.copy2(os.path.join(ROOT, "LICENSE.md"), os.path.join(STAGE, "LICENSE.md"))
     print("✓ 暂存目录：", STAGE_WIN)
 
     # 3) 绿色版 zip
