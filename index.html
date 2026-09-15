@@ -73,6 +73,12 @@
   .det-desc a.link{color:var(--accent);font-weight:600;cursor:pointer;}
   .det-desc figure.limg{margin:14px 0;text-align:center;}
   .det-desc figure.limg img{max-width:100%;max-height:70vh;border-radius:8px;border:1px solid var(--line);display:block;margin:0 auto;background:#fff;}
+  .imgmiss{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    min-height:96px;border:1px dashed #c9bda6;border-radius:8px;background:#faf7f1;color:#a99e8e;
+    font-size:12px;line-height:1.7;padding:14px;}
+  .imgmiss .imt{font-size:12.5px;color:#8d857a;}
+  .imgmiss .imv{font-size:15px;color:var(--accent);letter-spacing:2px;}
+  .imgmiss .imn{color:#a99e8e;}
   .det-desc figure.limg figcaption{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.5;}
   .sub h3{font-size:13.5px;color:var(--mut);margin:6px 0 9px;}
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
@@ -197,6 +203,7 @@
 <header>
   <div class="brand">ArborInversa<small>逆生树</small></div>
   <span class="reload" id="reloadHint"></span>
+  <span class="reload" id="missHint" style="cursor:pointer;display:none" title="点开看缺哪几张"></span>
   <div class="toolbar">
     <button id="btnEdit" class="primary">编辑当前枝</button>
     <button id="btnAdd" class="ghost">＋ 在当前枝下抽枝</button>
@@ -307,9 +314,34 @@
     </div>
   </div>
 </div>
+<div class="modal" id="missModal">
+  <div class="box">
+    <h3>本机缺这些图</h3>
+    <div class="where">树里引用了，但这个设备的图库里没有。把图放进 media/ 目录就能显示。</div>
+    <div class="mvlist" id="missList"></div>
+    <div class="acts"><button id="missClose" class="primary">知道了</button></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
+// ---- 存取：内容从哪读、往哪写 ----
+// 默认＝本地服务（Windows 版的 C# 服务端／WSL 里跑的 serve.js），数据在 data.json。
+// 网页便携版会在前面注入 window.ArborStore 覆盖它：那时内容就写在这份 HTML 自己身上，
+// 不需要任何后端（见 tools/portable-store.js 与 tools/build_web.js）。
+const Store = window.ArborStore || {
+  mediaBase: "/media/",
+  load: () => fetch("/data").then(r=>r.json()),
+  async save(d){
+    const r=await fetch("/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});
+    return (await r.json()).ok;
+  },
+  async uploadImage(name,dataURL){
+    const r=await fetch("/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,data:dataURL})});
+    return await r.json();
+  }
+};
+
 // ---- 数据与状态 ----
 let DATA=null;
 let curPath=[];        // 当前查看枝路径([]{根})
@@ -351,6 +383,35 @@ function parsePropValue(raw){
 // 反过来：属性值 → 输入框里的文本（多值用逗号连接，与 parsePropValue 对应）
 const propEditText=v=>Array.isArray(v)? v.join("，"): (v==null?"":String(v));
 
+// ---- 图片的值：平水韵 106 韵目做字表，图片内容哈希 → 五言 ----
+// 为什么用值而不是文件名：文件名会重、会改，两台设备上同名未必同图。
+// 值由**内容**决定，所以同一张图在任何设备上算出来都一样：改名不失效、天然去重、
+// 验得出「同名不同图」，缺图时也能说清缺的是哪一张。
+//
+// ★★ 这张表一个字都不能改 ★★
+// 改一个字，所有已分配的图片值都会变，等于让图库和文本全部对不上。
+// 顺序：上平15 下平15 上声29 去声30 入声17 = 106（平水韵）
+const IMG_TABLE=
+  "東冬江支微魚虞齊佳灰真文元寒刪"+
+  "先蕭肴豪歌麻陽庚青蒸尤侵覃鹽咸"+
+  "董腫講紙尾語麌薺蟹賄軫吻阮旱潸銑篠巧皓哿馬養梗迥有寢感琰豏"+
+  "送宋絳寘未御遇霽泰卦隊震問願翰諫霰嘯效號箇禡漾敬徑宥沁勘豔陷"+
+  "屋沃覺質物月曷黠屑藥陌錫職緝合葉洽";
+const IMG_LEN=5;                               // 五言：106^5 ≈ 134 亿种，一两百张图绰绰有余
+const IMG_CHARS=new Set([...IMG_TABLE]);
+const isImgValue=s=>typeof s==="string" && s.length===IMG_LEN && [...s].every(c=>IMG_CHARS.has(c));
+// 内容哈希（十六进制字符串）→ 值。哈希各端自己算（浏览器 crypto.subtle／Node crypto／C# SHA256），
+// 这里只负责「哈希 → 五个字」这一步，保证三边结果一致。
+function imgValueFromHash(hex){
+  const M=BigInt(IMG_TABLE.length);
+  const x=BigInt("0x"+String(hex||"").slice(0,20));      // 取前 80 bit，够 5×16
+  let out="";
+  for(let i=0;i<IMG_LEN;i++) out+=IMG_TABLE[Number((x>>BigInt(16*(IMG_LEN-1-i)))%M)];
+  return out;
+}
+// 值不带扩展名，而浏览器里没法列目录 —— 按候选扩展名依次试（见 renderRich）
+const IMG_EXTS=["svg","png","jpg","jpeg","webp","gif","bmp","avif"];
+
 // ---- 树遍历：先根后子。数据侧的遍历只留这一份递归，其余都从它派生 ----
 function eachNode(cb,node,path,depth){
   node=node||DATA; path=path||[]; depth=depth||0;
@@ -390,6 +451,79 @@ function linkify(text){
     return `<a class="link" data-jump="${JSON.stringify(p)}">${esc(name)}</a>`;
   });
 }
+// ---- 图片：值是纯值（不带扩展名），浏览器里没法列目录 → 按候选扩展名依次试 ----
+// 试出来的结果记在 imgCache 里：同一个值只试一次；试完都不行就是「缺图」。
+const imgCache=new Map();          // 值/文件名 → 可用地址，或 false（本机没有）
+const imgMissing=new Set();        // 本机缺哪些
+function imgCandidates(ref){
+  if(!isImgValue(ref)) return [Store.mediaBase+encodeURIComponent(ref)];
+  return IMG_EXTS.map(e=>Store.mediaBase+ref+"."+e);
+}
+function imgSrcOf(ref){ return imgCache.has(ref)? imgCache.get(ref) : undefined; }
+function imgMissHTML(ref,cap){
+  return '<figure class="limg"><div class="imgmiss"><span class="imt">这里本应有图</span>'+
+    '<span class="imv">'+esc(ref)+'</span>'+(cap?'<span class="imn">'+esc(cap)+'</span>':'')+
+    '</div></figure>';
+}
+function markMissing(ref){
+  if(!imgMissing.has(ref)){ imgMissing.add(ref); updateMissHint(); }
+}
+function updateMissHint(){
+  const el=$("#missHint"); if(!el) return;
+  el.style.display=imgMissing.size? "" : "none";
+  el.textContent=imgMissing.size? ("· 缺 "+imgMissing.size+" 张图") : "";
+}
+function showMissList(){
+  const host=$("#missList"); if(!host) return;
+  const refs=[...imgMissing];
+  host.innerHTML=refs.length
+    ? refs.map(r=>'<div class="mvopt" style="cursor:default">'+(isImgValue(r)?"值 ":"文件 ")+esc(r)+'</div>').join("")
+    : '<div class="empty">图都在。</div>';
+  $("#missModal").classList.add("show");
+}
+// 图片加载失败：值就换下一个扩展名，试完仍不行（或本来就没扩展名的）→ 占位 ＋ 记一笔
+function bindImgs(root){
+  root.querySelectorAll("figure.limg img").forEach(im=>{
+    im.onerror=()=>{
+      const ref=im.getAttribute("data-ref")||"";
+      const cands=imgCandidates(ref);
+      const i=(parseInt(im.getAttribute("data-cand"),10)||0)+1;
+      if(isImgValue(ref) && i<cands.length){
+        im.setAttribute("data-cand",i); im.src=cands[i]; return;
+      }
+      imgCache.set(ref,false); markMissing(ref);
+      const fig=im.closest("figure.limg");
+      const cap=(fig&&fig.querySelector("figcaption"))? fig.querySelector("figcaption").textContent : "";
+      if(fig) fig.outerHTML=imgMissHTML(ref,cap);
+    };
+    im.onload=()=>{ imgCache.set(im.getAttribute("data-ref")||"", im.getAttribute("src")); };
+  });
+}
+// 全树扫一遍：把没见过的引用都试一次，好一次列全「缺哪几张」
+// （不抢当前渲染，慢慢试；本地文件几乎瞬间返回）
+function scanMissingImgs(){
+  const refs=new Set();
+  eachNode(n=>leavesOf(n).forEach(l=>{
+    for(const m of String(l.desc||"").matchAll(/!\[\[([^\]]+)\]\]/g)){
+      const f=(m[1].split("|")[0]||"").trim(); if(f) refs.add(f);
+    }
+  }));
+  const todo=[...refs].filter(r=>!imgCache.has(r));
+  let i=0;
+  (function next(){
+    if(i>=todo.length){ renderDetail(); return; }   // 扫完重绘一次，占位就都出来了
+    const ref=todo[i++], cands=imgCandidates(ref);
+    let j=0;
+    (function tryOne(){
+      if(j>=cands.length){ imgCache.set(ref,false); markMissing(ref); return next(); }
+      const probe=new Image();
+      probe.onload=()=>{ imgCache.set(ref,cands[j]); next(); };
+      probe.onerror=()=>{ j++; tryOne(); };
+      probe.src=cands[j];
+    })();
+  })();
+}
+
 // 叶内容渲染：先切出 ![[图片]] 片段，其余文本再走 linkify
 // 语法: ![[文件名]]  或  ![[文件名|题注]]
 function renderRich(text){
@@ -401,7 +535,11 @@ function renderRich(text){
     const file=(seg[0]||"").trim();
     const cap=(seg[1]||"").trim();
     if(!file) continue;
-    h+=`<figure class="limg"><img src="/media/${encodeURIComponent(file)}" alt="${esc(cap||file)}" loading="lazy">`+
+    const alt=esc(cap||file);
+    const known=imgSrcOf(file);                 // 已经试出来过就直接用，免得再闪一下
+    const src=known===undefined? imgCandidates(file)[0] : known;
+    if(known===false){ h+=imgMissHTML(file,cap); continue; }
+    h+=`<figure class="limg"><img src="${src}" data-ref="${esc(file)}" data-cand="${known===undefined?0:imgCandidates(file).indexOf(known)}" alt="${alt}" loading="lazy">`+
        (cap?`<figcaption>${esc(cap)}</figcaption>`:"")+`</figure>`;
   }
   return h;
@@ -606,6 +744,7 @@ function renderDetail(){
   d.querySelectorAll("[data-jump]").forEach(el=>{
     el.onclick=e=>{ e.stopPropagation(); const p=JSON.parse(el.getAttribute("data-jump")); goto(p); };
   });
+  bindImgs(d);
   setReloadHint(n);
   placeLeafMeta();
   bindPropPanel();
@@ -1219,8 +1358,7 @@ function pickImage(ta){
     if(!f) return;
     try{
       const dataURL=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f);});
-      const r=await fetch("/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:f.name,data:dataURL})});
-      const j=await r.json();
+      const j=await Store.uploadImage(f.name,dataURL);
       if(!j.ok) return toast("图片上传失败: "+(j.error||"未知错误"));
       insertAtCursor(ta,`![[${j.name}]]`);
       toast("已插入 ![[${j.name}]] —— 点“保存到文件”后生效");
@@ -1505,19 +1643,21 @@ $("#plantOk").onclick=async()=>{
 
 // ---- 保存 ----
 async function save(){
-  try{ const r=await fetch("/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(DATA)});
-    return (await r.json()).ok; }catch(e){ return false; }
+  try{ return await Store.save(DATA); }catch(e){ return false; }
 }
 function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
 $("#btnHome").onclick=()=>goto([]);
+$("#missHint").onclick=showMissList;
+$("#missClose").onclick=()=>$("#missModal").classList.remove("show");
 
 // ---- 初始化 ----
-fetch("/data").then(r=>r.json()).then(d=>{
+Store.load().then(d=>{
   DATA=d;
   hist=JSON.parse(localStorage.getItem(LS_KEY)||"[]");
   if(!hist.length) hist=[{path:[],name:DATA.name,time:Date.now()}];
   const cs=document.querySelector("#paneC .scroll"); if(cs) cs.addEventListener("scroll",hidePropPop,{passive:true});
   render();
+  scanMissingImgs();          // 后台把「缺哪几张图」一次列全
 }).catch(()=>{ $("#detail").innerHTML="<div style='padding:20px;color:#a33;'>无法加载 data.json。<br>请确认 data.json 与程序在同一个文件夹里，然后重开程序。</div>"; });
 </script>
 </body>

@@ -57,7 +57,8 @@ function slice(a, b, what) {
   return src.slice(i, j);
 }
 const engine = new Function('DATA', loadPure() +
-  '\nreturn {sTokens,searchUnits,runSearch,runQuery,runRows,rowsToTokens,condSyntax,findPathsByName,inPath,isBranchConst,esc};');
+  '\nreturn {sTokens,searchUnits,runSearch,runQuery,runRows,rowsToTokens,condSyntax,findPathsByName,inPath,isBranchConst,esc,' +
+  'IMG_TABLE,IMG_LEN,IMG_EXTS,isImgValue,imgValueFromHash};');
 
 const { treeToCode, codeToTree } = loadCodec();
 
@@ -196,6 +197,27 @@ ok('esc：转义后不留裸引号（属性名/值里的 " 不会把 HTML 属性
   assert.ok(s.indexOf('&quot;') >= 0, '引号该被转成 &quot;');
   assert.strictEqual(S.esc('<b>&</b>'), '&lt;b&gt;&amp;&lt;/b&gt;');
   assert.strictEqual(S.esc(null), '', 'null 不该变成 "null"');
+});
+ok('图片值：平水韵 106 韵目字表完整、无重复、分组 15/15/29/30/17', () => {
+  const g = [...S.IMG_TABLE];
+  assert.strictEqual(g.length, 106, '平水韵共 106 韵');
+  assert.strictEqual(new Set(g).size, 106, '字表里不该有重复字');
+  assert.deepStrictEqual(
+    [g.slice(0, 15).length, g.slice(15, 30).length, g.slice(30, 59).length, g.slice(59, 89).length, g.slice(89).length],
+    [15, 15, 29, 30, 17], '上平/下平/上声/去声/入声');
+});
+ok('图片值：同一张图必得同值、不同内容必不同值、形如五言', () => {
+  const crypto = require('crypto');
+  const h = s => crypto.createHash('sha256').update(s).digest('hex');
+  const a = S.imgValueFromHash(h('some-image-bytes'));
+  assert.strictEqual(a, S.imgValueFromHash(h('some-image-bytes')), '值必须由内容唯一决定');
+  assert.ok(S.isImgValue(a), '认得出这是值：' + a);
+  assert.strictEqual([...a].length, S.IMG_LEN);
+  assert.ok(!S.isImgValue('示例-汝窑天青釉.svg'), '带文件名的老写法不该被当成值');
+  assert.ok(!S.isImgValue('东冬江支微'), '简体字不在表里，不该误认');
+  const seen = new Set();
+  for (let i = 0; i < 2000; i++) seen.add(S.imgValueFromHash(h('img' + i)));
+  assert.strictEqual(seen.size, 2000, '2000 张图不该出现撞值');
 });
 ok('condSyntax 与 rowsToTokens 同一张表：条件行写出来的语法能搜回同样的东西', () => {
   const cases = [
