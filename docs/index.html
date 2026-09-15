@@ -123,7 +123,10 @@
 
   /* 右栏：行动树 ⇄ 搜索 */
   .pane-tabs{display:flex;gap:6px;align-items:center;padding:8px 10px 6px;background:var(--card);border-bottom:1px solid var(--line);}
-  .pane-tab{border:1px solid #cbc1b2;background:#fff;color:#6b6355;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;}
+  /* 标签可以被压窄（右栏能拖到 110px），但不许换行／不许被拉高 —— 折起来会把
+     「行动树」列表整块顶下去（实测 39px → 71px）。 */
+  .pane-tab{border:1px solid #cbc1b2;background:#fff;color:#6b6355;padding:3px 10px;border-radius:14px;
+    font-size:12px;cursor:pointer;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .pane-tab:hover{background:#f2ecdf;}
   .pane-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
   /* 枝名悬停 1 秒后的属性浮层（不挡鼠标） */
@@ -204,6 +207,13 @@
      下面每条都带 html.is-mobile 前缀 —— 桌面版一个像素都不动。
      手机上没有 hover、没有分隔条可拖、地址栏还会伸缩，所以这几处都要另作安排。 */
   .navbtn,.pane-close,.sheet-tgl,.scrim{display:none;}      /* 只在手机版出现 */
+  /* 前进／后退两颗（◁ ▷）：**两种界面都有** —— 用户要求，桌面端着顺手，手机上也一样。
+     放在「行动树｜搜索」标签**左边**，用边框分成一小簇 */
+  .navpair{display:flex;gap:4px;flex:none;margin-right:6px;padding-right:8px;border-right:1px solid var(--line);}
+  .navpair button{border:1px solid #cbc1b2;background:#fff;color:#6b6355;border-radius:6px;
+    padding:2px 9px;font-size:12px;line-height:1.5;cursor:pointer;}
+  .navpair button:hover:not(:disabled){background:#f2ecdf;color:var(--accent);}
+  .navpair button:disabled{opacity:.35;cursor:default;}
   html.is-mobile{-webkit-text-size-adjust:100%;}
   /* 顶栏两行（用户定的排法）：第一行 ☰ ＋ 品牌名，第二行整行都是编辑按钮、可左右滑。
      整个 body 竖着排，顶栏自然高度、正文吃剩下的 —— 别再把顶栏高度写死 52px */
@@ -257,6 +267,8 @@
   html.is-mobile #paneR:not(.open) .scroll{display:none;}   /* 收起时不留半截内容 */
   html.is-mobile .pane-tabs{padding:5px 10px;flex-wrap:nowrap;}
   html.is-mobile .pane-tab{flex:none;min-height:32px;font-size:12.5px;padding:4px 12px;}
+  html.is-mobile .navpair{margin-right:5px;padding-right:7px;}
+  html.is-mobile .navpair button{min-height:32px;padding:3px 11px;font-size:13px;}
   html.is-mobile .sheet-tgl{display:block;flex:none;margin-left:auto;border:0;background:none;
     color:var(--mut);font-size:11.5px;padding:7px 8px;min-height:0;cursor:pointer;}
 
@@ -1008,7 +1020,7 @@ function codeToTree(text){
 // ---- 渲染 ----
 const eq=(a,b)=>a.length===b.length&&a.every((v,k)=>b[k]===v);      // 同一个枝
 const isPrefix=(a,b)=>a.length<b.length&&a.every((v,k)=>b[k]===v);  // a 是 b 的祖先
-function render(){ renderTree(); renderDetail(); renderHistory(); fillDatalists(); }
+function render(){ renderTree(); renderDetail(); renderHistory(); fillDatalists(); renderNav(); }
 
 function renderTree(){
   const ul=$("#tree"); ul.innerHTML=""; buildUL(DATA,[],ul);
@@ -1115,6 +1127,7 @@ function goto(path,leafIdx){
   const n=nodeAt(path)||DATA;
   hist.unshift({path:path.slice(), name:n.name, time:Date.now()});
   localStorage.setItem(LS_KEY,JSON.stringify(hist.slice(0,120)));
+  navRecord(path);                             // 前进／后退的账本（存路径，别传节点）
   render();
 }
 function setReloadHint(n){ $("#reloadHint").textContent=n?( "· 当前: "+n.name ):"· 未加载"; }
@@ -1669,6 +1682,62 @@ $("#sInput").addEventListener("keydown",e=>{
 document.addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&String(e.key).toLowerCase()==="k"){ e.preventDefault(); switchRight("search"); } });
 // ==== 搜索 END ====
 
+// ---- 前进／后退（◁ ▷，行动树那一行。桌面端与手机端都有）----
+// 语义：行动树里第一条＝最近走过的枝；「◁」＝回到上一个走过的枝，「▷」＝退回（走回来）。
+// 根一直留在队尾，所以「上一个」最多只能退到根 —— 那之前没别的枝可回。
+// ★ 账本里存的是**路径**（如 [1,0]），不是节点：枝对象是 {name,props,leaves,children}，
+//   **根本没有 path 字段** —— 早先按 n.path 取，点一下就抛错，整个跳转都断在那儿。
+let navStack=[], navPos=0;
+const navNameAt=p=>(nodeAt(p)||DATA).name;
+function navReset(path){
+  const p=(path||[]).slice();
+  navStack=[{path:p, name:navNameAt(p)}];
+  navPos=0; renderNav();
+}
+function navRecord(path){                     // goto() 里登记一次（前进／后退本身不记，免得来回打架）
+  const p=(path||[]).slice();
+  navStack=navStack.slice(0,navPos+1);
+  navStack.push({path:p, name:navNameAt(p)});
+  navPos=navStack.length-1;
+  if(navStack.length>120){ navStack=navStack.slice(-120); navPos=navStack.length-1; }
+  renderNav();
+}
+function navTo(i){
+  if(i<0||i>=navStack.length||i===navPos) return;
+  navPos=i;
+  const e=navStack[i];
+  curPath=e.path.slice(); curLeaf=0;
+  hist=hist.filter(h=>h.path.join()!=curPath.join());
+  hist.unshift({path:curPath.slice(), name:(nodeAt(curPath)||DATA).name, time:Date.now()});
+  localStorage.setItem(LS_KEY,JSON.stringify(hist.slice(0,120)));
+  render();                                  // render() 里会顺手刷新两颗按钮的可用状态
+}
+function renderNav(){
+  const back=document.getElementById("navBack"), fwd=document.getElementById("navFwd");
+  if(!back||!fwd) return;
+  const last=navStack.length-1;
+  const bName=navPos>0? navStack[navPos-1].name : "";
+  const fName=navPos<last? navStack[navPos+1].name : "";
+  back.disabled=!(navPos>0);
+  fwd.disabled=!(navPos<last);
+  back.title=bName? ("◁ 回到「"+bName+"」") : "◁ 没有上一个枝（已经在头一个）";
+  fwd.title=fName? ("▷ 退回「"+fName+"」") : "▷ 没有下一个枝（已经是最新的）";
+}
+(function mountNav(){
+  const tabs=document.querySelector("#paneR .pane-tabs"); if(!tabs) return;
+  const wrap=document.createElement("div"); wrap.className="navpair";
+  const back=document.createElement("button");
+  back.type="button"; back.id="navBack"; back.textContent="◁";
+  const fwd=document.createElement("button");
+  fwd.type="button"; fwd.id="navFwd"; fwd.textContent="▷";
+  wrap.appendChild(back); wrap.appendChild(fwd);
+  tabs.insertBefore(wrap,tabs.firstChild);
+  back.onclick=()=>navTo(navPos-1);
+  fwd.onclick=()=>navTo(navPos+1);
+  renderNav();
+})();
+// ==== 搜索 END ====
+
 // ---- 编辑枝 + 叶 ----
 let editTarget=null;
 let editLeaves=[];
@@ -2078,6 +2147,7 @@ Store.load().then(d=>{
   DATA=d;
   hist=JSON.parse(localStorage.getItem(LS_KEY)||"[]");
   if(!hist.length) hist=[{path:[],name:DATA.name,time:Date.now()}];
+  navReset([]);               // 前进／后退的账本：一开局只有根
   const cs=document.querySelector("#paneC .scroll"); if(cs) cs.addEventListener("scroll",hidePropPop,{passive:true});
   render();
   scanMissingImgs();          // 后台把「缺哪几张图」一次列全
