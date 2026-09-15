@@ -58,7 +58,7 @@ function slice(a, b, what) {
 }
 const engine = new Function('DATA', loadPure() +
   '\nreturn {sTokens,searchUnits,runSearch,runQuery,runRows,rowsToTokens,condSyntax,findPathsByName,inPath,isBranchConst,esc,' +
-  'IMG_TABLE,IMG_LEN,IMG_EXTS,isImgValue,imgValueFromHash};');
+  'IMG_TABLE,IMG_LEN,IMG_EXTS,isImgValue,imgValueFromHash,isMobileUA,isMobileUI,uiOverrideOf};');
 
 const { treeToCode, codeToTree } = loadCodec();
 
@@ -252,6 +252,47 @@ ok('condSyntax 与 rowsToTokens 同一张表：条件行写出来的语法能搜
   }
   assert.strictEqual(S.condSyntax([{ kind: 'branch', value: '  ' }]), '', '空值条件不写语法');
   assert.strictEqual(S.condSyntax([{ kind: 'prop', key: '', value: 'x' }]), '', '属性没填名字不写语法');
+});
+
+// 手机版判定：认得准才不会「手机上打开却是三栏挤成一条缝」，也不会「电脑上打开成了手机版」。
+// 判据只有一处落进 HTML —— <html> 上的 is-mobile 类；这里验的就是决定它的那个纯函数。
+ok('手机版判定：UA 认得出手机，不误伤电脑', () => {
+  const MOBILE = [
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Windows Phone 10.0; Android 6.0.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0 Mobile Safari/537.36 Edge/15.15063',
+    'Mozilla/5.0 (iPad; CPU OS 12_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1',
+  ];
+  const DESKTOP = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
+    '',   // 拿不到 UA（隐私模式等）：只能靠宽度那条兜底
+  ];
+  MOBILE.forEach(ua => assert.strictEqual(S.isMobileUA(ua), true, '该认成手机：' + ua.slice(0, 60)));
+  DESKTOP.forEach(ua => assert.strictEqual(S.isMobileUA(ua), false, '不该认成手机：' + ua.slice(0, 60)));
+});
+ok('手机版判定：地址栏开关说了算，其次看 UA，最后看宽度', () => {
+  const DESK = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0 Safari/537.36';
+  const PHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Safari/604.1';
+  const D = (ua, width, override, mobileData) => S.isMobileUI({ ua, width, override, mobileData });
+  assert.strictEqual(D(DESK, 1280, 'mobile'), true, '?ui=mobile 在电脑上也要给手机版');
+  assert.strictEqual(D(PHONE, 390, 'desktop'), false, '?ui=desktop 在手机上也要给三栏');
+  assert.strictEqual(D(DESK, 1280), false, '宽屏电脑＝三栏');
+  assert.strictEqual(D(DESK, 700), true, '窄窗口的电脑也塞不下三栏');
+  assert.strictEqual(D(PHONE, 818), true, '手机横屏比 768 还宽，靠 UA 认出来');
+  assert.strictEqual(D('', 390), true, '认不出 UA 时靠宽度兜底');
+  assert.strictEqual(D(DESK, 1280, '', true), true, 'userAgentData.mobile 说了算');
+  assert.strictEqual(D(DESK, 1280, '', false), false, 'userAgentData.mobile=false 别当成手机');
+});
+ok('手机版判定：?ui= 只认这两个值', () => {
+  assert.strictEqual(S.uiOverrideOf('?ui=mobile'), 'mobile');
+  assert.strictEqual(S.uiOverrideOf('?a=1&ui=desktop&b=2'), 'desktop');
+  assert.strictEqual(S.uiOverrideOf('?ui=MOBILE'), 'mobile', '大小写不该影响');
+  assert.strictEqual(S.uiOverrideOf('?ui=tablet'), '', '别的值一律当没写');
+  assert.strictEqual(S.uiOverrideOf(''), '');
+  assert.strictEqual(S.uiOverrideOf('?xui=mobile'), '', '不是 ui= 这个参数就不算');
 });
 
 // ── 二、示例树专属断言 ─────────────────────────────────────

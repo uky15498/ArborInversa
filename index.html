@@ -198,7 +198,124 @@
   .aihelp .aihead button{font-size:11px;padding:3px 10px;}
   #plantAiText{width:100%;min-height:200px;max-height:38vh;font-family:ui-monospace,Consolas,monospace;
     font-size:11.5px;line-height:1.62;white-space:pre;overflow:auto;color:#3a342b;background:#fff;}
+
+  /* ===== 手机版：三栏收成浮层，正文占满屏 =====
+     判定见 <head> 里的「手机」纯函数区，结果只落在 <html class="is-mobile"> 这一个类上，
+     下面每条都带 html.is-mobile 前缀 —— 桌面版一个像素都不动。
+     手机上没有 hover、没有分隔条可拖、地址栏还会伸缩，所以这几处都要另作安排。 */
+  .navbtn,.pane-close,.sheet-tgl,.scrim{display:none;}      /* 只在手机版出现 */
+  html.is-mobile{-webkit-text-size-adjust:100%;}
+  html.is-mobile body{height:100vh;height:100dvh;overscroll-behavior:none;}
+  /* 顶栏：品牌缩一号；按钮仍全在顶栏，排成一条可以左右滑的带子 */
+  html.is-mobile header{padding:0 10px;gap:8px;}
+  html.is-mobile .brand{font-size:15px;flex:none;}
+  html.is-mobile .brand small{display:none;}
+  html.is-mobile #reloadHint{display:none;}                 /* 「当前: data.json」在手机上没意义 */
+  html.is-mobile #missHint{flex:none;margin-left:0;}
+  html.is-mobile .navbtn{display:block;flex:none;font-size:15px;padding:0 10px;min-height:36px;}
+  html.is-mobile .toolbar{flex:1 1 auto;min-width:0;margin-left:0;flex-wrap:nowrap;
+    overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  html.is-mobile .toolbar::-webkit-scrollbar{display:none;}
+  html.is-mobile .toolbar button{flex:none;white-space:nowrap;min-height:36px;font-size:13px;padding:6px 12px;}
+  /* 正文铺满：底下给「收起状态的标签栏」留出一条 */
+  html.is-mobile .workbench{height:calc(100vh - 52px);height:calc(100dvh - 52px);
+    padding-bottom:calc(44px + env(safe-area-inset-bottom));}
+  html.is-mobile .splitter{display:none;}                   /* 栏都成浮层了，没有可拖的分隔条 */
+  html.is-mobile #detail{padding:14px 15px 36px;}
+  html.is-mobile .epigraph{display:none;}                   /* 右下角题词会压住正文 */
+  html.is-mobile .crumb{font-size:11.5px;}
+
+  /* 目录树 → 左侧抽屉：用的还是 #paneL 那一份，不另建一棵树 */
+  html.is-mobile #paneL{position:fixed;left:0;top:0;bottom:0;z-index:60;
+    width:min(84vw,320px)!important;background:var(--card);
+    padding-top:env(safe-area-inset-top);box-shadow:2px 0 18px rgba(60,48,30,.16);
+    transform:translateX(-102%);transition:transform .2s ease;}
+  html.is-mobile #paneL.open{transform:none;}
+  html.is-mobile #paneL .pane-title{display:flex;align-items:center;gap:8px;padding:12px 12px 8px;}
+  html.is-mobile #paneL #tree{padding:6px 8px 20px;}
+  /* 手机是指头点的：枝那一行要够高（桌面 27px 太密，点不准） */
+  html.is-mobile #tree .tn{padding:10px 8px;font-size:14px;}
+  html.is-mobile .pane-close{display:block;margin-left:auto;border:0;background:none;color:var(--mut);
+    font-size:16px;line-height:1;padding:7px 9px;min-height:0;cursor:pointer;}
+  html.is-mobile .scrim{display:block;position:fixed;inset:0;z-index:55;background:rgba(30,25,18,.4);
+    opacity:0;pointer-events:none;transition:opacity .2s;}
+  html.is-mobile .scrim.show{opacity:1;pointer-events:auto;}
+
+  /* 行动树／搜索 → 底部面板；收起＝只留 44px 一条标签栏 */
+  html.is-mobile #paneR{position:fixed;left:0;right:0;bottom:0;width:auto!important;z-index:58;
+    height:calc(44px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
+    background:var(--card);border-top:1px solid var(--line);box-shadow:0 -2px 12px rgba(60,48,30,.06);
+    transition:height .2s ease;}
+  html.is-mobile #paneR.open{height:min(58vh,520px);height:min(58dvh,520px);}
+  html.is-mobile #paneR:not(.open) .scroll{display:none;}   /* 收起时不留半截内容 */
+  html.is-mobile .pane-tabs{padding:5px 10px;flex-wrap:nowrap;}
+  html.is-mobile .pane-tab{flex:none;min-height:32px;font-size:12.5px;padding:4px 12px;}
+  html.is-mobile .sheet-tgl{display:block;flex:none;margin-left:auto;border:0;background:none;
+    color:var(--mut);font-size:11.5px;padding:7px 8px;min-height:0;cursor:pointer;}
+
+  /* 手机上要用手点、用键盘弹：目标做大一点，输入框不小于 16px（iOS 小了会把页面放大） */
+  html.is-mobile .propbtn{min-height:32px;}
+  html.is-mobile .prow input,html.is-mobile .prow select{min-height:32px;}
+  html.is-mobile .prow .pdel,html.is-mobile .cond .cdel{min-height:32px;}
+  html.is-mobile .sbox input{font-size:16px;}
+  html.is-mobile .box{width:94vw;max-height:88vh;max-height:88dvh;padding:16px 15px;}
+  html.is-mobile .box input,html.is-mobile .box textarea{font-size:16px;}
+  html.is-mobile .box textarea.code{min-height:36vh;font-size:12.5px;}
+  html.is-mobile .box .acts button{min-height:38px;flex:1;}
+  html.is-mobile .toast{bottom:calc(56px + env(safe-area-inset-bottom));}
+  /* 320px 那一档（iPhone SE）：品牌名让位给按钮，顶栏只剩 ☰ 和按钮带 */
+  @media (max-width:360px){
+    html.is-mobile .brand{display:none;}
+  }
 </style>
+<script>
+// ==== 纯函数区 BEGIN：界面（手机版判定，不碰 DOM）====
+// ==== 手机 BEGIN ====
+// 「手机版」＝ 三栏收成浮层（目录树变左侧抽屉、行动树变底部面板），正文占满整屏。
+// 判据三层，从硬到软：
+//   ① 地址栏开关 ?ui=mobile / ?ui=desktop —— 定死了就听它的（会记进浏览器本地）
+//   ② 浏览器自称手机：navigator.userAgentData.mobile 优先（Chromium 的新接口，比字符串可靠），
+//      退回 UA 字符串。★ 注意 iPad 从 iPadOS 13 起自称 Macintosh，这一层认不出来 ★
+//   ③ 视口太窄（≤768px）：三栏本来就挤不下 —— 窄窗口的电脑、iPad 分屏、横屏手机都靠这条兜住
+// 结果只有一处落进 HTML：<html> 上的 is-mobile 类。所有手机样式都挂在它下面，桌面版不受影响。
+const UI_LS_KEY="arborinversa_ui";
+function isMobileUA(ua){
+  return /Android|iPhone|iPod|iPad|Windows Phone|IEMobile|Opera Mini|webOS|BlackBerry|Mobile\//i.test(String(ua||""));
+}
+function uiOverrideOf(search){
+  const m=/[?&]ui=(mobile|desktop)/i.exec(String(search||""));
+  return m? m[1].toLowerCase() : "";
+}
+function isMobileUI(o){                      // o={ua,mobileData,width,override}
+  o=o||{};
+  if(o.override==="mobile")  return true;
+  if(o.override==="desktop") return false;
+  if(o.mobileData===true)    return true;
+  if(isMobileUA(o.ua))       return true;
+  return (o.width||0)<=768;
+}
+// ==== 手机 END ====
+// ==== 纯函数区 END ====
+(function(){
+  const ov=uiOverrideOf(location.search);
+  if(ov){ try{ localStorage.setItem(UI_LS_KEY,ov); }catch(e){} }
+  let saved=""; try{ saved=localStorage.getItem(UI_LS_KEY)||""; }catch(e){}
+  const override=ov||saved;
+  const probe=()=>({
+    ua:navigator.userAgent,
+    mobileData:!!(navigator.userAgentData&&navigator.userAgentData.mobile),
+    width:window.innerWidth||0,
+    override:override
+  });
+  const apply=p=>{ document.documentElement.classList.toggle("is-mobile",isMobileUI(p)); };
+  apply(probe());
+  // 手动开关定死了就照办；否则只有「③ 窄」这条会随窗口变，宽回来要切回三栏
+  window.addEventListener("resize",()=>{
+    const p=probe();
+    if(!p.override && p.mobileData!==true && !isMobileUA(p.ua)) apply(p);
+  });
+})();
+</script>
 </head>
 <body>
 <header>
@@ -1300,8 +1417,10 @@ function switchRight(which){
   $("#wrapHist").style.display=isS?"none":"";
   if(isS){
     fillDatalists();
-    const w=parseInt($("#paneR").style.width||"0",10);
-    if(w && w<300) $("#paneR").style.width="320px";      // 限定栏在窄栏里挤，进来时先撑开一点
+    if(!mobileUI()){                                     // 手机版：右栏已是整屏宽的底部面板，不用撑开
+      const w=parseInt($("#paneR").style.width||"0",10);
+      if(w && w<300) $("#paneR").style.width="320px";    // 限定栏在窄栏里挤，进来时先撑开一点
+    }
     renderConds(); doSearch(); $("#sInput").focus();
   }
 }
@@ -1652,6 +1771,70 @@ function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show")
 $("#btnHome").onclick=()=>goto([]);
 $("#missHint").onclick=showMissList;
 $("#missClose").onclick=()=>$("#missModal").classList.remove("show");
+
+// ==== 手机版：目录树当抽屉、行动树当底部面板 ====
+// 判据只有一个 —— <html> 上有没有 is-mobile 类（判定逻辑在 <head> 的纯函数区里）。
+// 桌面版这些元素也在 DOM 里，但 CSS 让它们 display:none，且下面每个动作都先问一句 mobileUI()。
+function mobileUI(){ return document.documentElement.classList.contains("is-mobile"); }
+(function(){
+  const paneL=$("#paneL"), paneR=$("#paneR"), header=document.querySelector("header");
+  const near=(el,sel)=>(el&&el.closest)?el.closest(sel):null;   // ★ 返回元素本身，别在这儿加 !!
+
+  // 三件只在手机版露面的小机关（桌面版被 CSS 藏起来，不占位、不动布局）
+  const scrim=document.createElement("div"); scrim.className="scrim"; document.body.appendChild(scrim);
+
+  const nav=document.createElement("button");
+  nav.type="button"; nav.className="navbtn"; nav.title="展开／收起目录树"; nav.textContent="☰";
+  header.insertBefore(nav,header.firstChild);
+
+  const closeBtn=document.createElement("button");
+  closeBtn.type="button"; closeBtn.className="pane-close"; closeBtn.title="收起目录树"; closeBtn.textContent="✕";
+  paneL.querySelector(".pane-title").appendChild(closeBtn);
+
+  const tgl=document.createElement("button");
+  tgl.type="button"; tgl.className="sheet-tgl";
+  paneR.querySelector(".pane-tabs").appendChild(tgl);
+
+  const drawerOn=()=>paneL.classList.contains("open");
+  const sheetOn=()=>paneR.classList.contains("open");
+  function setDrawer(on){ paneL.classList.toggle("open",!!on); scrim.classList.toggle("show",!!on); }
+  function setSheet(on){ paneR.classList.toggle("open",!!on); tgl.textContent=on?"收起 ▼":"展开 ▲"; }
+  setSheet(false);
+
+  nav.onclick=()=>setDrawer(!drawerOn());
+  closeBtn.onclick=()=>setDrawer(false);
+  scrim.onclick=()=>setDrawer(false);
+  tgl.onclick=()=>setSheet(!sheetOn());
+
+  // 捕获阶段先跑（早于目标自己的点击处理）：
+  //   ① 点底部那两个标签 —— 没展开就展开；正展开着再点它，就收回去
+  //   ② 跳转之后自动收起，让正文露出来（点枝／点搜索结果／点历史）
+  document.addEventListener("click",e=>{
+    if(!mobileUI()) return;
+    const tab=near(e.target,"#tabHist,#tabSearch");
+    if(tab){                                          // 标签本身的切换照旧交给 switchRight
+      if(sheetOn() && tab.classList.contains("on")) setSheet(false); else setSheet(true);
+      return;
+    }
+    if(near(e.target,"#tree .tn")) setDrawer(false);
+    if(near(e.target,"#sres .sitem")||near(e.target,"#history li")) setSheet(false);
+  },true);
+
+  // 手机没有 hover：点枝名也能看属性浮层，点别处收起（桌面仍是「悬停 1 秒」）
+  document.addEventListener("click",e=>{
+    if(!mobileUI()) return;
+    const h1=near(e.target,"#detail h1");
+    if(h1){
+      if(document.getElementById("propPop")) hidePropPop();
+      else{ const n=nodeAt(curPath)||DATA; if(hasProps(n)&&!propOpen) showPropPop(h1,n); }
+      return;
+    }
+    if(!near(e.target,"#propPop")) hidePropPop();
+  });
+
+  // 窄窗口的电脑上按 Esc 收抽屉（底部面板的 Esc 留给搜索框自己用）
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&mobileUI()) setDrawer(false); });
+})();
 
 // ---- 初始化 ----
 Store.load().then(d=>{
