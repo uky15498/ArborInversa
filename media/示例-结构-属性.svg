@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="296" viewBox="0 0 720 296">
+  <rect width="720" height="296" fill="#faf8f4"/>
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif">
+
+    <text x="40" y="34" font-size="14.5" fill="#2f5d50">属性挂在枝上：键 → 值，一人一行</text>
+
+    <!-- 枝 + 它的属性 -->
+    <rect x="40" y="52" width="190" height="46" rx="7" fill="#e3ece4" stroke="#8fb3a1" stroke-width="2"/>
+    <text x="135" y="81" font-size="16" fill="#2c2822" text-anchor="middle">结构</text>
+
+    <rect x="40" y="112" width="190" height="26" rx="13" fill="#eef3ea" stroke="#d8e4d2"/>
+    <text x="56" y="130" font-size="12.5" fill="#5b7a68">类型　分类</text>
+
+    <rect x="40" y="146" width="190" height="26" rx="13" fill="#eef3ea" stroke="#d8e4d2"/>
+    <text x="56" y="164" font-size="12.5" fill="#5b7a68">标签　枝　叶　属性</text>
+
+    <rect x="40" y="180" width="190" height="26" rx="13" fill="#f6f2ea" stroke="#ddd3c2" stroke-dasharray="4 3"/>
+    <text x="56" y="198" font-size="12.5" fill="#a99e8e">＋ 还可以再加</text>
+
+    <!-- 说明：写进文本代码的样子 -->
+    <line x1="262" y1="52" x2="262" y2="230" stroke="#e3dbcc"/>
+    <text x="292" y="76" font-size="14" fill="#2f5d50">文本代码里就是这么写的</text>
+    <rect x="292" y="92" width="386" height="112" rx="8" fill="#fbf8f2" stroke="#e7dfd0"/>
+    <g font-family="Consolas, ui-monospace, monospace" font-size="13" fill="#3a342b">
+      <text x="308" y="116">枝 结构</text>
+      <text x="324" y="140">属性 类型: 分类</text>
+      <text x="324" y="164">属性 标签: 枝, 叶, 属性</text>
+      <text x="308" y="190">叶 枝</text>
+    </g>
+
+    <text x="292" y="232" font-size="12.5" fill="#645c4d">值里用逗号分隔，就是多个值（上图第二行是三个值）。</text>
+    <text x="292" y="256" font-size="12.5" fill="#a99e8e">属性可选，键与值都自定义。</text>
+    <text x="292" y="278" font-size="12.5" fill="#a99e8e">左栏详情页点「属性 ⁝」就地改，改完自动存回文件。</text>
+  </g>
+</svg>

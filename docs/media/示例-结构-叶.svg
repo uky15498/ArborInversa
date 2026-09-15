@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="270" viewBox="0 0 720 270">
+  <rect width="720" height="270" fill="#faf8f4"/>
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif">
+
+    <!-- 一根枝 -->
+    <rect x="40" y="104" width="150" height="46" rx="7" fill="#e3ece4" stroke="#8fb3a1" stroke-width="2"/>
+    <text x="115" y="133" font-size="16" fill="#2c2822" text-anchor="middle">隋唐</text>
+
+    <!-- 三片叶：横向排开 -->
+    <line x1="190" y1="127" x2="240" y2="127" stroke="#cfc3ae" stroke-width="2" stroke-dasharray="5 4"/>
+    <line x1="240" y1="52" x2="240" y2="202" stroke="#cfc3ae" stroke-width="2" stroke-dasharray="5 4"/>
+
+    <line x1="240" y1="52" x2="272" y2="52" stroke="#cfc3ae" stroke-width="2"/>
+    <rect x="272" y="30" width="404" height="46" rx="7" fill="#fffdf8" stroke="#cfc3ae" stroke-width="2"/>
+    <text x="290" y="58" font-size="14" fill="#2f5d50">叶　形势</text>
+    <text x="404" y="58" font-size="12.5" fill="#a99e8e">国力、思想、制度 —— 这一代的大势</text>
+
+    <line x1="240" y1="127" x2="272" y2="127" stroke="#cfc3ae" stroke-width="2"/>
+    <rect x="272" y="105" width="404" height="46" rx="7" fill="#e3ece4" stroke="#8fb3a1" stroke-width="2.5"/>
+    <text x="290" y="133" font-size="14" fill="#2c2822">叶　变迁</text>
+    <text x="404" y="133" font-size="12.5" fill="#5b7a68">当前第 2 叶 —— 点上面的叶名就能切换</text>
+
+    <line x1="240" y1="202" x2="272" y2="202" stroke="#cfc3ae" stroke-width="2"/>
+    <rect x="272" y="180" width="404" height="46" rx="7" fill="#fffdf8" stroke="#cfc3ae" stroke-width="2"/>
+    <text x="290" y="208" font-size="14" fill="#2f5d50">叶　环</text>
+    <text x="404" y="208" font-size="12.5" fill="#a99e8e">它在整条链上的位置 —— 承上启下</text>
+
+    <!-- 说明 -->
+    <text x="40" y="34" font-size="14.5" fill="#2f5d50">一枝三叶：横向并排，各自一片正文</text>
+    <text x="40" y="246" font-size="12.5" fill="#645c4d">叶只管内容，枝只管结构 —— 所以一根枝上可以挂任意多片叶，互不干扰。</text>
+    <text x="40" y="264" font-size="12.5" fill="#a99e8e">叶名显示在枝名右侧，点一下横向切换（上图高亮的那片就是当前正在看的）。</text>
+  </g>
+</svg>

@@ -322,7 +322,13 @@ if (!IS_DEMO_FILE || !anchorsOK) {
     eqSet(NAMES(S.runSearch('深:2')), ['再深一层']);
   });
   ok('含: 图／链／下枝', () => {
-    eqSet(NAMES(S.runSearch('含:图')), ['能力›插图']);
+    // 「含:图」的期望值从夹具自己算：凡是正文里有 ![[…]] 的叶都该命中 ——
+    // 免得每次给示例树加张图都要回来改这条断言（加图是常事）
+    const withImg = [];
+    walk(ROOT, n => (n.leaves || []).forEach(l => {
+      if (/!\[\[/.test(String(l.desc || ''))) withImg.push(n.name + '›' + (l.name || '叶'));
+    }));
+    eqSet(NAMES(S.runSearch('含:图')), withImg);
     eqSet(NAMES(S.runSearch('含:链')), ['能力›跳转']);
     eqSet(NAMES(S.runSearch('含:下枝')), ['示例树', '能力']);
   });

@@ -30,6 +30,9 @@ media/*
 # （值＝图片内容算出来的五言，见 index.html 里的 IMG_TABLE；改名后正文引用也要跟着改）
 !media/尾豏魚賄尾.svg
 !media/示例-枝叶结构.svg
+!media/示例-结构-枝.svg
+!media/示例-结构-叶.svg
+!media/示例-结构-属性.svg
 
 # 本地运维/AI 交接笔记：给新对话看的碎碎念，只在本机，不进仓库
 开发笔记.md
