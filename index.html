@@ -213,7 +213,7 @@
   html.is-mobile .brand small{display:none;}
   html.is-mobile #reloadHint{display:none;}                 /* 「当前: data.json」在手机上没意义 */
   html.is-mobile #missHint{flex:none;margin-left:auto;}     /* 缺图提示靠右，与品牌同一行 */
-  html.is-mobile .navbtn{display:block;flex:none;font-size:15px;padding:0 11px;min-height:34px;}
+  html.is-mobile .navbtn{display:block;flex:none;font-size:14px;padding:0 11px;min-height:34px;white-space:nowrap;}
   html.is-mobile .toolbar{flex:1 0 100%;min-width:0;margin-left:0;flex-wrap:nowrap;
     overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
   html.is-mobile .toolbar::-webkit-scrollbar{display:none;}
@@ -1787,7 +1787,7 @@ function mobileUI(){ return document.documentElement.classList.contains("is-mobi
   const scrim=document.createElement("div"); scrim.className="scrim"; document.body.appendChild(scrim);
 
   const nav=document.createElement("button");
-  nav.type="button"; nav.className="navbtn"; nav.title="展开／收起目录树"; nav.textContent="☰";
+  nav.type="button"; nav.className="navbtn"; nav.title="展开／收起目录树"; nav.textContent="☰ 目录树";
   header.insertBefore(nav,header.firstChild);
 
   const closeBtn=document.createElement("button");
