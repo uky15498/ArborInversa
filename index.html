@@ -101,6 +101,7 @@
   .modal{position:fixed;inset:0;background:rgba(30,25,18,.5);display:none;align-items:center;justify-content:center;z-index:100;}
   .modal.show{display:flex;}
   .box{background:var(--card);border-radius:13px;width:min(680px,93vw);padding:20px 24px;max-height:92vh;overflow:auto;}
+  .box.mid{width:min(660px,93vw);}          /* 迁移弹窗：与原来一样窄一点 */
   .box h3{font-size:16px;}
   .box .where{font-size:11.5px;color:var(--mut);margin:2px 0 6px;}
   .box label{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px;}
@@ -309,10 +310,10 @@
   </div>
 </div>
 <div class="modal" id="moveModal">
-  <div class="box">
+  <div class="box mid">
     <h3 id="mvTitle">⇄ 迁移</h3>
     <div class="where" id="mvVia"></div>
-    <label>选择目标位置（点下方任一枝，即把当前枝移到它下面）</label>
+    <label>选择目标位置（点下方任一枝，即把当前枝移到它下面）:</label>
     <div class="mvlist" id="mvDest"></div>
     <div class="acts"><button id="mvCxl">取消</button><button id="mvOk" class="primary">确认迁移</button></div>
   </div>
@@ -758,11 +759,16 @@ function propPanelHTML(node){
     pairs.join("")+
     '<div class="prow padd-row"><button class="padd" id="propAdd">＋ 加一条属性</button></div></div>';
 }
-// 读回一组「键值行」：属性栏与编辑弹窗的行长得一样，读法也就这一份
+// 读回一组「键值行」：属性栏与编辑弹窗的行长得一样，读法也就这一份。
+// 注意「＋ 加一条属性」那一行也是 .prow，但没有输入框 —— 跳过它（少了这道判断就会抛错）
 function readPropRows(rows){
-  return [...rows].map(r=>({k:r.querySelector(".pkey").value.trim(),
-                            raw:r.querySelector(".pval").value.trim(),
-                            pk:r.getAttribute("data-pk")||""}));
+  const out=[];
+  [...rows].forEach(r=>{
+    const kEl=r.querySelector(".pkey"), vEl=r.querySelector(".pval");
+    if(!kEl||!vEl) return;
+    out.push({k:kEl.value.trim(), raw:vEl.value.trim(), pk:r.getAttribute("data-pk")||""});
+  });
+  return out;
 }
 // 读回属性栏 → 写回 data.json（结构性改动才重绘，免得打字时丢焦点）
 function collectInlineProps(){
@@ -778,26 +784,31 @@ function collectInlineProps(){
   return {props:out, structural:structural, dropped:dropped};
 }
 async function saveInlineProps(){
-  const n=nodeAt(curPath)||DATA;
-  const cur=propsOf(n)||{};
-  // 值被清空的行 → 还原成原值，不当作删除（要删除请点「删」按钮）
-  let reverted=false;
-  document.querySelectorAll("#detail .prow").forEach(r=>{
-    const kEl=r.querySelector(".pkey"); if(!kEl) return;
-    const k=kEl.value.trim(), vEl=r.querySelector(".pval");
-    if(k && !vEl.value.trim() && cur[k]!==undefined){
-      vEl.value=Array.isArray(cur[k])? cur[k].join('，') : String(cur[k]);
-      reverted=true;
-    }
-  });
-  const r=collectInlineProps();
-  if(Object.keys(r.props).length) n.props=r.props; else delete n.props;
-  const ok=await save();
-  fillDatalists();
-  if(r.dropped) toast("有 "+r.dropped+" 行没填属性名，已跳过（补上名字再点别处即可保存）");
-  else if(reverted) toast("属性值不能为空 —— 已还原（要删除请点「删」）");
-  else toast(ok? "属性已保存" : "属性保存失败");
-  if(r.structural||propDraft){ propDraft=false; renderDetail(); }
+  try{
+    const n=nodeAt(curPath)||DATA;
+    const cur=propsOf(n)||{};
+    // 值被清空的行 → 还原成原值，不当作删除（要删除请点「删」按钮）
+    let reverted=false;
+    document.querySelectorAll("#detail .prow").forEach(r=>{
+      const kEl=r.querySelector(".pkey"); if(!kEl) return;
+      const k=kEl.value.trim(), vEl=r.querySelector(".pval");
+      if(k && vEl && !vEl.value.trim() && cur[k]!==undefined){
+        vEl.value=Array.isArray(cur[k])? cur[k].join('，') : String(cur[k]);
+        reverted=true;
+      }
+    });
+    const r=collectInlineProps();
+    if(Object.keys(r.props).length) n.props=r.props; else delete n.props;
+    const ok=await save();
+    fillDatalists();
+    if(r.dropped) toast("有 "+r.dropped+" 行没填属性名，已跳过（补上名字再点别处即可保存）");
+    else if(reverted) toast("属性值不能为空 —— 已还原（要删除请点「删」）");
+    else toast(ok? "属性已保存" : "属性保存失败");
+    if(r.structural||propDraft){ propDraft=false; renderDetail(); }
+  }catch(e){
+    // 以前这里出错是静默的（异步 rejection 没人接）：属性没存上却什么提示都没有
+    toast("属性没能保存："+((e&&e.message)||e));
+  }
 }
 function bindPropPanel(){
   const t=$("#propToggle");

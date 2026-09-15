@@ -20,6 +20,15 @@ function json(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
+// 读请求体：必须先把 Buffer 收齐再整体转成字符串。
+// 以前写成 body += chunk（隐式 toString），请求体一旦在某个汉字的 3 个字节中间被 TCP 分块切开，
+// 那个字就会变成乱码 —— 保存时**悄悄改坏内容**（实测复现过「山水」→「山??」）。
+function readBody(req, cb) {
+  const chunks = [];
+  req.on("data", (c) => chunks.push(c));
+  req.on("end", () => cb(Buffer.concat(chunks).toString("utf8")));
+}
+
 function handle(req, res) {
   const url = (req.url || "").split("?")[0];
 
@@ -32,9 +41,7 @@ function handle(req, res) {
 
   // 保存数据
   if (req.method === "POST" && url === "/save") {
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, (body) => {
       try {
         const obj = JSON.parse(body);
         if (!obj || !obj.name) throw new Error("缺 name");
@@ -47,9 +54,7 @@ function handle(req, res) {
 
   // 图片上传 (JSON: {name, data:dataURL})
   if (req.method === "POST" && url === "/upload") {
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, (body) => {
       try {
         const { name, data } = JSON.parse(body);
         const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(data || "");
