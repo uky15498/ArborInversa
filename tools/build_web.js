@@ -5,6 +5,8 @@
 //   node tools/build_web.js 我的树.txt                 # 用树语言文本
 //   node tools/build_web.js /mnt/c/ArborInversa/data.json   # 也可以直接吃 data.json（自动转成树语言）
 //   node tools/build_web.js 输入 输出.html              # 指定输出路径
+//   node tools/build_web.js --check                     # 核对 docs/index.html（线上那份）是不是最新的
+//   node tools/build_web.js 示例树.txt docs/index.html   # 重新生成线上那份（改了 index.html 或示例树就跑它）
 //
 // 产物：一个自包含的 HTML —— 双击（file://）就能用，不需要后端、不需要联网。
 //   内容写在该文件末尾的 <script id="tree-data"> 里，是**树语言文本**：
@@ -21,8 +23,12 @@ const DEMO = path.join(REPO, '示例树.txt');
 const DIST = path.join(REPO, 'dist');
 
 const args = process.argv.slice(2);
-const input = args[0] || DEMO;
-const out = args[1] || path.join(DIST, 'ArborInversa-在线版.html');
+const CHECK = args.includes('--check');
+const pos = args.filter(a => !a.startsWith('--'));
+// 线上那份（GitHub Pages 用的就是它）：docs/index.html ＋ docs/media/
+const DOCS = path.join(REPO, 'docs', 'index.html');
+const input = pos[0] || (CHECK ? DEMO : DEMO);
+const out = pos[1] || (CHECK ? DOCS : path.join(DIST, 'ArborInversa-在线版.html'));
 
 const { treeToCode, codeToTree } = loadCodec();
 
@@ -146,6 +152,18 @@ function jsSyntaxErrors(page) {
 const syntaxBad = jsSyntaxErrors(html);
 checks.push(['产物里的内联脚本都能通过语法检查', syntaxBad.length === 0]);
 
+if (CHECK) {
+  if (!fs.existsSync(out)) { console.error('× 还没有 ' + path.relative(REPO, out) + ' —— 跑：node tools/build_web.js 示例树.txt docs/index.html'); process.exit(1); }
+  const cur = fs.readFileSync(out, 'utf8');
+  if (cur !== html) {
+    console.error('× ' + path.relative(REPO, out) + ' 与当前 index.html／输入不一致（线上那份过期了）');
+    console.error('  （可能是改了 index.html 或示例树之后忘了重新生成）跑：');
+    console.error('    node tools/build_web.js ' + path.relative(REPO, input) + ' ' + path.relative(REPO, out));
+    process.exit(1);
+  }
+  console.log('✓ ' + path.relative(REPO, out) + ' 是最新的（与 index.html ＋ ' + path.basename(input) + ' 一致）');
+  process.exit(0);
+}
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, html, 'utf8');
 
@@ -157,3 +175,11 @@ checks.forEach(c => console.log('  ' + (c[1] ? '✓' : '×') + ' ' + c[0]));
 if (syntaxBad.length) syntaxBad.forEach(x => console.error('    内联脚本语法错误：' + x));
 if (bad.length) { console.error('× 自检没过，产物不可信'); process.exit(1); }
 console.log('✓ 便携版已生成 —— 双击即可打开，不需要后端');
+// 线上那份还要把示例树用到的插图放到同级 media/（浏览器没法列目录，路径得对得上）
+if (path.resolve(out) === path.resolve(DOCS)) {
+  const src = path.join(REPO, 'media'), dst = path.join(path.dirname(out), 'media');
+  fs.mkdirSync(dst, { recursive: true });
+  let n = 0;
+  for (const f of fs.readdirSync(src)) { fs.copyFileSync(path.join(src, f), path.join(dst, f)); n++; }
+  console.log('  同步插图 ' + n + ' 个 → ' + path.relative(REPO, dst) + '/');
+}

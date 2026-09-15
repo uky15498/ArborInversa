@@ -1,0 +1,1957 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ArborInversa</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{--bg:#f4f1ec;--card:#fffdf8;--line:#e3dbcc;--ink:#2c2822;--mut:#8d857a;--accent:#2f5d50;}
+  html,body{height:100%;}
+  body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);overflow:hidden;}
+  header{height:52px;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 18px;}
+  .brand{font-weight:700;font-size:17px;}
+  .brand small{color:var(--mut);font-weight:400;font-size:12px;margin-left:6px;}
+  .toolbar{margin-left:auto;display:flex;gap:8px;}
+  button{border:1px solid #cbc1b2;background:#fff;color:#4a443a;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:12.5px;}
+  button:hover{background:#f2ecdf;}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  button.ghost{border-color:var(--accent);color:var(--accent);}
+  button.danger{border-color:#b35a45;color:#b35a45;background:#fff;}
+  button.danger:hover{background:#fdf0ec;}
+  .reload{font-size:11.5px;color:var(--mut);margin-left:6px;}
+
+  /* three-column workbench */
+  .workbench{display:flex;height:calc(100% - 52px);}
+  .pane{position:relative;display:flex;flex-direction:column;min-width:0;}
+  #paneL,#paneR{flex:0 0 auto;}
+  #paneC{flex:1 1 auto;}
+  .pane-title{font-size:12px;color:var(--mut);padding:10px 14px 6px;font-weight:600;background:var(--card);border-bottom:1px solid var(--line);}
+  .scroll{flex:1;overflow:auto;}
+  .splitter{width:5px;cursor:col-resize;background:var(--line);flex:none;}
+  .splitter:hover{background:var(--accent);}
+
+  /* left tree */
+  #tree{list-style:none;padding:8px 6px 16px;font-size:13.5px;}
+  #tree ul{list-style:none;margin-left:9px;border-left:1px dashed #d9cfbd;padding-left:6px;}
+  #tree ul.active-line{border-left:2px solid #8fb3a1;}
+  #tree li{margin:0;}
+  .tn{display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:6px;cursor:pointer;}
+  .tn:hover{background:#f0e9dc;}
+  .tn .tw{color:#b1a690;width:15px;font-size:9px;text-align:center;flex:none;}
+  .tn .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tn .bd{font-size:10px;background:#e7e0d2;color:#7c715f;padding:0 5px;border-radius:8px;flex:none;}
+  .tn .lchips{display:flex;gap:3px;margin-left:5px;min-width:0;overflow:hidden;}
+  .tn .lchip{font-size:10px;background:#eef3ea;color:#5b7a68;border:1px solid #d8e4d2;padding:0 6px;border-radius:8px;white-space:nowrap;flex:none;}
+  .tn.active .lchip{background:#fff;border-color:#bcd3c4;}
+  .tn.active{background:#e3ece4;font-weight:600;}
+  .tn.tint{background:#f0f5f0;}
+  .tn.has-kids .nm{font-weight:600;}
+
+  /* center detail */
+  #detail{padding:18px 22px 96px;}
+  /* 右下角题词（浅色、不遮挡点击） */
+  .epigraph{position:absolute;right:20px;bottom:12px;text-align:right;
+    font-size:17.25px;font-weight:700;line-height:1.75;color:#c9bfae;letter-spacing:.4px;
+    pointer-events:none;user-select:none;}
+  .epigraph .src{display:block;font-size:15.75px;color:#d6cdbe;margin-top:2px;}
+  .crumb{font-size:12px;color:var(--mut);margin-bottom:10px;word-break:break-all;}
+  .crumb a{color:var(--accent);cursor:pointer;text-decoration:none;}
+  .crumb a:hover{text-decoration:underline;}
+  .det-head{display:flex;align-items:flex-end;gap:11px;flex-wrap:wrap;margin-bottom:6px;}
+  .name-col{display:flex;flex-direction:column;align-items:center;width:max-content;max-width:100%;}
+  .det-head h1{font-size:24px;}
+  .pill{font-size:11px;color:#52625a;background:#e9efe5;border:1px solid #cfe0ca;padding:2px 10px;border-radius:10px;}
+  .leaf-tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .leaf-tab{border:1px solid #cbc1b2;background:#fff;color:#6b6355;padding:3px 12px;border-radius:14px;font-size:12.5px;cursor:pointer;}
+  .leaf-tab:hover{background:#f2ecdf;}
+  .leaf-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  .meta-line{display:block;margin:0 0 7px;}
+  .leaf-meta-line{height:19px;margin:0 0 10px;}
+  #leafMeta{position:relative;display:inline-block;transform:translateX(-50%);white-space:nowrap;}
+  .det-desc{font-size:15px;line-height:1.95;color:#3a342b;white-space:pre-wrap;border-left:3px solid #cfc3ae;padding-left:15px;margin:6px 0 20px;}
+  .det-desc a.link{color:var(--accent);font-weight:600;cursor:pointer;}
+  .det-desc figure.limg{margin:14px 0;text-align:center;}
+  .det-desc figure.limg img{max-width:100%;max-height:70vh;border-radius:8px;border:1px solid var(--line);display:block;margin:0 auto;background:#fff;}
+  .imgmiss{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    min-height:96px;border:1px dashed #c9bda6;border-radius:8px;background:#faf7f1;color:#a99e8e;
+    font-size:12px;line-height:1.7;padding:14px;}
+  .imgmiss .imt{font-size:12.5px;color:#8d857a;}
+  .imgmiss .imv{font-size:15px;color:var(--accent);letter-spacing:2px;}
+  .imgmiss .imn{color:#a99e8e;}
+  .det-desc figure.limg figcaption{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.5;}
+  .sub h3{font-size:13.5px;color:var(--mut);margin:6px 0 9px;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+  .card{background:#fbf8f2;border:1px solid #e7dfd0;border-radius:10px;padding:13px 14px;cursor:pointer;transition:transform .15s,box-shadow .15s;}
+  .card:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(90,74,40,.09);}
+  .card .cn{font-weight:700;color:var(--accent);margin-bottom:4px;font-size:14.5px;}
+  .card .cd{font-size:12px;color:#645c4d;line-height:1.5;}
+  .card .cm{font-size:11px;color:#a99e8e;margin-top:7px;}
+
+  /* right history / action tree */
+  #history{list-style:none;padding:8px 6px 16px;font-size:12.5px;}
+  #history li{padding:5px 6px;border-radius:6px;margin:1px 0;cursor:pointer;}
+  #history li:hover{background:#f0e9dc;}
+  #history li .hrow{display:flex;gap:5px;align-items:baseline;}
+  #history li .i{color:#b1a690;flex:none;font-size:10px;}
+  #history li .t{color:var(--accent);word-break:break-word;overflow-wrap:anywhere;}
+  #history li .p{display:block;color:var(--mut);font-size:10.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #history li.followed{opacity:.45;}
+  .empty{color:#b6ac99;font-size:12px;padding:10px;}
+  .mvopt{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0e9dc;display:flex;gap:6px;align-items:center;}
+  .mvopt:hover{background:#f2ecdf;}
+  .mvopt.sel{background:#e3ece4;color:var(--accent);font-weight:600;}
+  .mvopt::before{content:"→";color:#b1a690;font-size:11px;}
+
+  .modal{position:fixed;inset:0;background:rgba(30,25,18,.5);display:none;align-items:center;justify-content:center;z-index:100;}
+  .modal.show{display:flex;}
+  .box{background:var(--card);border-radius:13px;width:min(680px,93vw);padding:20px 24px;max-height:92vh;overflow:auto;}
+  .box h3{font-size:16px;}
+  .box .where{font-size:11.5px;color:var(--mut);margin:2px 0 6px;}
+  .box label{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px;}
+  .box input,.box textarea{width:100%;padding:8px 10px;border:1px solid #cfc6b8;border-radius:7px;font-size:14px;font-family:inherit;}
+  .box textarea{min-height:120px;line-height:1.6;resize:vertical;}
+  .box textarea.code{min-height:300px;font-family:Consolas,ui-monospace,monospace;font-size:12.5px;line-height:1.65;white-space:pre;overflow:auto;}
+  .box .hint{font-size:11px;color:var(--accent);margin-top:6px;}
+  .box .acts{display:flex;gap:9px;justify-content:flex-end;margin-top:16px;}
+  .leafbox{border:1px solid #e3dbcc;border-radius:9px;padding:10px 11px;margin-bottom:10px;background:#fdfbf6;}
+  .leafrow{display:flex;gap:8px;align-items:center;margin-bottom:7px;}
+  .leafrow input{flex:1;}
+  .leafrow button{padding:5px 10px;flex:none;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2c2822;color:#fff;padding:8px 16px;border-radius:8px;font-size:12.5px;opacity:0;transition:.25s;z-index:120;}
+  .toast.show{opacity:.95;}
+
+  /* 右栏：行动树 ⇄ 搜索 */
+  .pane-tabs{display:flex;gap:6px;align-items:center;padding:8px 10px 6px;background:var(--card);border-bottom:1px solid var(--line);}
+  .pane-tab{border:1px solid #cbc1b2;background:#fff;color:#6b6355;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;}
+  .pane-tab:hover{background:#f2ecdf;}
+  .pane-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  /* 枝名悬停 1 秒后的属性浮层（不挡鼠标） */
+  .prop-pop{position:fixed;z-index:90;pointer-events:none;background:var(--card);border:1px solid var(--line);
+    border-radius:9px;padding:9px 12px;box-shadow:0 8px 22px rgba(90,74,40,.14);max-width:min(420px,80vw);}
+  .prop-pop .pt{font-size:10.5px;color:#b6ac99;margin-bottom:5px;}
+  .prop-pop .pr{display:flex;gap:8px;font-size:12px;line-height:1.7;align-items:baseline;}
+  .prop-pop .pk{color:var(--mut);flex:none;min-width:3.5em;}
+  .prop-pop .pv{color:#3a342b;word-break:break-word;}
+  .prop-pop .pchip{display:inline-block;font-size:11px;background:#eef3ea;color:#5b7a68;border:1px solid #d8e4d2;
+    padding:0 6px;border-radius:8px;margin:0 4px 2px 0;}
+  /* 搜索 */
+  .sbox{padding:8px 10px 4px;}
+  .sbox input{width:100%;padding:6px 9px;border:1px solid #cfc6b8;border-radius:7px;font-size:13px;font-family:inherit;}
+  .srow{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--mut);margin-top:6px;}
+  .srow a{color:var(--accent);cursor:pointer;text-decoration:none;}
+  .scount{margin-left:auto;}
+  .shelp{font-size:10.5px;color:#6b6355;background:#fbf8f2;border:1px solid #e7dfd0;border-radius:8px;
+    padding:7px 9px;margin:7px 0 0;line-height:1.85;}
+  .shelp code{background:#eee7d9;padding:0 3px;border-radius:3px;}
+  .sitem{padding:6px 8px;border-radius:7px;cursor:pointer;}
+  .sitem:hover{background:#f0e9dc;}
+  .sitem.on{background:#e3ece4;}
+  .sitem .st{font-size:12.5px;color:var(--accent);font-weight:600;word-break:break-word;}
+  .sitem .sl{font-size:10px;color:#a99e8e;margin-left:5px;font-weight:400;}
+  .sitem .ss{font-size:11.5px;color:#645c4d;line-height:1.55;margin-top:2px;word-break:break-word;}
+  #sres{list-style:none;padding:4px 6px 16px;}
+  #search mark, #sres mark{background:#f6e5a8;color:inherit;border-radius:2px;padding:0 1px;}
+  /* 限定栏：条件行 */
+  .sfilters{padding:0 10px 4px;}
+  .srow2{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--mut);margin:0 0 6px;}
+  .srow2 a{color:var(--accent);cursor:pointer;white-space:nowrap;}
+  .srow2 select{font-size:11px;padding:1px 3px;border:1px solid #cfc6b8;border-radius:5px;background:#fff;color:#4a443a;margin-left:auto;}
+  .cond{display:flex;flex-wrap:wrap;gap:4px;align-items:center;background:#fbf8f2;border:1px solid #e7dfd0;
+    border-radius:8px;padding:5px 6px;margin-bottom:5px;}
+  .cond select,.cond input{font-size:11.5px;font-family:inherit;padding:3px 5px;border:1px solid #cfc6b8;
+    border-radius:5px;background:#fff;color:#4a443a;min-width:0;}
+  .cond .ckind{flex:none;}
+  .cond .ckey,.cond .cval{flex:1 1 56px;}
+  .cond .cdel{flex:none;border:1px solid #e2cfc8;color:#b35a45;background:#fff;border-radius:5px;
+    font-size:11px;padding:2px 6px;cursor:pointer;}
+  .cond .cdel:hover{background:#fdf0ec;}
+  .seq{font-size:10.5px;color:#8d857a;background:#f6f2ea;border:1px dashed #ddd3c2;border-radius:7px;
+    padding:4px 7px;margin:2px 0 7px;cursor:pointer;word-break:break-all;}
+  .snote{font-size:10.5px;color:#a99e8e;line-height:1.6;padding:1px 2px 5px;}
+  /* 详情页：属性按钮 + 展开的属性栏 */
+  .props-bar{display:flex;justify-content:flex-end;margin:0 0 5px;}
+  .propbtn{flex:none;border:1px solid #cbc1b2;background:#fff;color:#4a443a;
+    padding:3px 11px;border-radius:14px;font-size:12px;cursor:pointer;letter-spacing:.5px;}
+  .propbtn:hover{background:#f2ecdf;}
+  .propbtn.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  .props-panel{border:1px solid #e7dfd0;background:#fbf8f2;border-radius:10px;padding:9px 11px;margin:2px 0 12px;}
+  .props-panel .ph{font-size:10.5px;color:#a99e8e;margin-bottom:7px;line-height:1.6;}
+  .prow{display:flex;gap:5px;align-items:center;margin-bottom:5px;}
+  .prow input{font-size:12px;font-family:inherit;padding:4px 7px;border:1px solid #cfc6b8;border-radius:6px;
+    background:#fff;color:#3a342b;flex:1 1 58px;min-width:0;}
+  .prow select{font-size:11px;padding:3px 1px;border:1px solid #cfc6b8;border-radius:6px;background:#fff;
+    color:#6b6355;flex:none;max-width:72px;}
+  .prow .pdel{flex:none;border:1px solid #e2cfc8;color:#b35a45;background:#fff;border-radius:6px;
+    font-size:11px;padding:3px 7px;cursor:pointer;}
+  .prow .pdel:hover{background:#fdf0ec;}
+  .prow.padd-row{margin:6px 0 0;}
+  .padd{border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:7px;
+    font-size:12px;padding:4px 11px;cursor:pointer;}
+  .padd:hover{background:#f2f7f2;}
+  /* 弹窗里的「语法 / 告诉 ai」链接行 */
+  .linkrow{display:flex;gap:16px;align-items:center;font-size:12px;margin:6px 0 4px;}
+  .linkrow a{color:var(--accent);cursor:pointer;}
+  .aihelp{margin-top:9px;}
+  .aihelp .aihead{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#4a443a;margin-bottom:5px;}
+  .aihelp .aihead button{font-size:11px;padding:3px 10px;}
+  #plantAiText{width:100%;min-height:200px;max-height:38vh;font-family:ui-monospace,Consolas,monospace;
+    font-size:11.5px;line-height:1.62;white-space:pre;overflow:auto;color:#3a342b;background:#fff;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">ArborInversa<small>逆生树</small></div>
+  <span class="reload" id="reloadHint"></span>
+  <span class="reload" id="missHint" style="cursor:pointer;display:none" title="点开看缺哪几张"></span>
+  <div class="toolbar">
+    <button id="btnEdit" class="primary">编辑当前枝</button>
+    <button id="btnAdd" class="ghost">＋ 在当前枝下抽枝</button>
+    <button id="btnPlant" class="ghost">植树</button>
+    <button id="btnMove" class="ghost">⇄ 迁移当前枝</button>
+    <button id="btnDel" class="danger">删除当前枝</button>
+    <button id="btnHome">⌂ 根</button>
+  </div>
+</header>
+
+<div class="workbench">
+  <!-- LEFT: 目录树（枝，纵向） -->
+  <section class="pane" id="paneL"><div class="pane-title">目录树</div><div class="scroll"><ul id="tree"></ul></div></section>
+  <div class="splitter" id="sl"></div>
+
+  <!-- CENTER: 详情（叶，横向） -->
+  <section class="pane" id="paneC">
+    <div class="scroll" style="padding:0;"><div id="detail"></div></div>
+    <div class="epigraph">根上枝下，叶为颂歌；<br>若晓此树，便为明者。<span class="src">——《薄伽梵歌》</span></div>
+  </section>
+  <div class="splitter" id="sr"></div>
+
+  <!-- RIGHT: 历史/行动树 -->
+  <section class="pane" id="paneR">
+    <div class="pane-tabs">
+      <button class="pane-tab on" id="tabHist">行动树</button>
+      <button class="pane-tab" id="tabSearch">搜索</button>
+    </div>
+    <div class="scroll" id="wrapHist"><ul id="history"></ul></div>
+    <div class="scroll" id="wrapSearch" style="display:none">
+      <div class="sbox">
+        <input id="sInput" placeholder="关键词（可留空，只用条件）" autocomplete="off"/>
+        <div class="srow"><a id="sHelpBtn">语法</a><span class="scount" id="sCount"></span></div>
+        <div class="shelp" id="sHelp" style="display:none">
+          <code>词 词</code> 都要命中　<code>"整段短语"</code> 精确短语<br>
+          <code>-词</code> 排除　　<code>枝:xxx</code> 枝名<br>
+          <code>叶:xxx</code> 叶名　<code>文:xxx</code> 叶正文<br>
+          <code>下:xxx</code> 只在这枝及其下搜　<code>深:2</code> 层级<br>
+          <code>标签:xxx</code> 属性筛选　<code>有:属性名</code> 有此属性<br>
+          <code>含:图</code> 含插图　<code>含:链</code> 含跳转链接
+        </div>
+      </div>
+      <div class="sfilters">
+        <div class="srow2">
+          <a id="sAddCond" title="加一条限定条件">＋ 条件</a>
+          <a id="sAddScope" title="以当前枝为范围">用当前枝</a>
+          <select id="sCombine" title="多条条件之间的关系"><option value="and">并且</option><option value="or">或者</option></select>
+          <a id="sClrCond" title="清空全部条件">清空</a>
+        </div>
+        <div id="sConds"></div>
+        <div class="seq" id="sEquiv" style="display:none"></div>
+      </div>
+      <datalist id="dlBranches"></datalist>
+      <datalist id="dlLeaves"></datalist>
+      <datalist id="dlProps"></datalist>
+      <datalist id="dlPropVals"></datalist>
+      <ul id="sres"></ul>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="modal">
+  <div class="box">
+    <h3 id="mTitle">编辑</h3>
+    <div class="where" id="mVia"></div>
+    <label>枝名称（目录树中的名字）</label><input id="mName"/>
+    <label>属性（键值对；值用逗号分隔即为多个）</label>
+    <div id="mProps"></div>
+    <button id="mAddProp" class="ghost">＋ 加属性</button>
+    <label>叶（描述板块，可多个；叶名显示在枝名右侧）</label>
+    <div id="mLeaves"></div>
+    <button id="mAddLeaf" class="ghost">＋ 展叶</button>
+    <div class="hint">叶内容里可用 <code>[[条目名]]</code> 生成跳转链接。</div>
+    <div class="acts"><button id="mCxl">取消</button><button id="mSave" class="primary">保存到文件</button></div>
+  </div>
+</div>
+<div class="modal" id="plantModal">
+  <div class="box">
+    <h3>植树</h3>
+    <div class="where" id="plantVia"></div>
+    <div class="linkrow">
+      <a id="plantHelpBtn">语法</a>
+      <a id="plantAiBtn">告诉 ai 怎么帮你写</a>
+    </div>
+    <div class="shelp" id="plantHelp" style="display:none">
+      <b>每行一条语句，缩进表示层级</b>（2 个空格／1 个 Tab／1 个全角空格都行）：<br>
+      <code>树 名称</code> 整棵树的标题（只认最上面一行，可省）<br>
+      <code>枝 名称</code> 一根枝　<code>叶 名称</code> 一片叶（一枝可多片）<br>
+      <code>属性 键: 值</code> 该枝的属性；写在枝行下方、与叶行同级；值用逗号分隔即为多个<br>
+      <b>叶的内容</b>＝紧跟其后、缩进比它更深的所有行（共同缩进会被剥掉）<br>
+      叶正文里可用 <code>[[枝名]]</code> 生成跳转、<code>![[图片名]]</code> 插图<br>
+      更深的缩进一律算内容，所以叶正文里写「枝 某某」也不会被误当结构
+    </div>
+    <div class="shelp aihelp" id="plantAi" style="display:none">
+      <div class="aihead">把下面整段复制，发给任意 ai（对话框里粘贴即可），它就能读懂这套树语言并替你写代码：
+        <button id="plantAiCopy" class="ghost">复制</button></div>
+      <textarea id="plantAiText" readonly spellcheck="false"></textarea>
+    </div>
+    <label>树的文本代码</label>
+    <textarea id="plantCode" class="code" spellcheck="false" placeholder="把树的文本代码粘到这里，或先点「生成当前枝的代码」"></textarea>
+    <div class="acts">
+      <button id="plantGen">生成当前枝的代码</button>
+      <button id="plantLoad">从文件读取</button>
+      <button id="plantCopy">复制</button>
+      <button id="plantClear">清空</button>
+      <button id="plantCxl">取消</button>
+      <button id="plantOk" class="primary">植树</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="missModal">
+  <div class="box">
+    <h3>本机缺这些图</h3>
+    <div class="where">树里引用了，但这个设备的图库里没有。把图放进 media/ 目录就能显示。</div>
+    <div class="mvlist" id="missList"></div>
+    <div class="acts"><button id="missClose" class="primary">知道了</button></div>
+  </div>
+</div>
+
+<div class="modal" id="exportModal">
+  <div class="box">
+    <h3>导出</h3>
+    <div class="where" id="exportWhere"></div>
+    <div class="linkrow">
+      <a id="exportCopy">复制树语言文本</a>
+      <a id="exportTxt">下载 .txt</a>
+      <a id="exportHtml">另存为整份 HTML</a>
+      <a id="exportReset">丢掉改动</a>
+    </div>
+    <div class="shelp">
+      下面就是你的内容，<b>树语言文本</b>：竖向的「枝」用缩进表示层级，「叶」是挂在枝下的正文。
+      复制它、存成 .txt、或整份 HTML 另存为，都等于保存。<br>
+      想接着在别的设备上改：把这个 HTML（或这段文本）带走就行。
+    </div>
+    <textarea id="exportText" class="code" readonly spellcheck="false"></textarea>
+    <div class="acts"><button id="exportClose" class="primary">关闭</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// 网页便携版的「存取层」——由 tools/build_web.js 注入到 index.html 前面。
+//
+// 与 Windows 版／WSL 版的区别只有一处：内容不放在 data.json 里，而是写在
+// **这份 HTML 自己末尾**的 <script id="tree-data"> 块里。于是：
+//   · 一个文件＝程序 ＋ 内容，拷走就能用，双击（file://）就能开，不需要任何后端
+//   · 内容是**树语言文本**，人可读、可 diff、可复制到任何地方
+//   · 「保存」＝把内存里的树转回树语言文本，然后覆盖本文件／另存为／复制
+//
+// 没有后端，所以静态托管也能用：读是读文件里的，写是写回文件或剪贴板。
+// 未导出的改动会自动存进浏览器本地（localStorage），下次打开会问你要不要恢复。
+(function () {
+  var PAYLOAD_ID = "tree-data";
+  var DRAFT_KEY = "arborinversa_draft";
+
+  var baseText = "";      // 打开时文件里的内容（用来判断「改没改」）
+  var dirty = false;
+
+  // ---- 小工具 ----
+  function ready() {                       // 负载块在页面末尾，必须等 DOM 解析完才能读
+    return new Promise(function (res) {
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", res);
+      else res();
+    });
+  }
+  function payloadText() {
+    var el = document.getElementById(PAYLOAD_ID);
+    if (!el) return "";
+    // 容器在负载前后各加了一个换行；内容里的 `</` 在写入时转义成了 `<\/`（否则会截断容器）
+    return el.textContent.replace(/<\\\//g, "</").replace(/^\n/, "").replace(/\n$/, "");
+  }
+  function rootOf(parsed) {                 // 解析结果 → 根枝（兼容「树 名称」写法）
+    if (parsed.children && parsed.children.length) return parsed.children[0];
+    if (parsed.title) return { name: parsed.title, leaves: parsed.leaves || [], children: [], props: parsed.props };
+    return null;
+  }
+  function toastMsg(m) { if (typeof toast === "function") toast(m); }
+  function hint(text) {
+    var el = document.getElementById("portableHint");
+    if (el) el.textContent = text || "";
+  }
+  function setDirty(v) {
+    dirty = v;
+    hint(v ? "· 有改动未导出" : "· 与文件一致");
+  }
+  function currentText() { return treeToCode(DATA, 0); }
+
+  // ---- 未导出的改动：存浏览器本地，别让它悄悄没了 ----
+  function saveDraft(text) {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ text: text, base: baseText, at: Date.now() }));
+    } catch (e) { /* 隐私模式等存不了就算了，导出仍然可用 */ }
+  }
+  function readDraft() {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch (e) { return null; }
+  }
+  function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+
+  // ---- 存取层：接管 index.html 里的 /data 与 /save ----
+  window.ArborStore = {
+    mediaBase: "media/",                   // 图片放在本文件同级的 media/ 目录里
+    load: function () {
+      return ready().then(function () {
+        var raw = payloadText();
+        if (!raw.trim()) throw new Error("这份文件末尾没有内嵌的树（tree-data 块是空的）");
+        var parsed = codeToTree(raw);
+        var root = rootOf(parsed);
+        if (!root || !root.name) throw new Error("内嵌的树里没有枝");
+        baseText = raw;
+        setDirty(false);
+
+        var d = readDraft();
+        if (d && d.text && d.text !== raw) {
+          var when = new Date(d.at).toLocaleString();
+          if (confirm("上次有改动没有导出（" + when + "）。\n\n" +
+                      "确定＝接着用那些改动；取消＝用这份 HTML 里的内容。\n" +
+                      "（改动仍然留在浏览器里，不会因为选取消就丢掉）")) {
+            var back = rootOf(codeToTree(d.text));
+            if (back) { saveDraft(d.text); setDirty(true); return back; }
+            toastMsg("上次的草稿读不出来，已改用文件里的内容");
+          }
+        }
+        return root;
+      });
+    },
+    save: function (data) {                // 没有后端：存草稿，等用户导出
+      try {
+        var text = treeToCode(data, 0);
+        saveDraft(text);
+        setDirty(text !== baseText);
+        return true;
+      } catch (e) { return false; }
+    },
+    uploadImage: function () {             // 便携版不上传：图片放同级 media/ 目录即可
+      return { ok: false, error: "便携版不带图片上传 —— 把图片放进本文件同级的 media/ 目录，再在叶里写 ![[文件名]]" };
+    }
+  };
+
+  // ---- 导出 ----
+  // 整份 HTML 怎么来：构建脚本在本文件**末尾**（负载块之后）抓一份「解析后、还没渲染」
+  // 的页面源码存进 window.__ARBOR_SRC__；导出时只把里面的负载块换掉，其余一字不动。
+  // 放在末尾是必须的：抓早了，负载块还没被解析，导出的文件会丢掉内容。
+
+  var TAG_OPEN = "<" + "script", TAG_CLOSE = "</" + "script>";   // 拆开写：内联脚本里不能出现字面量结束标签
+  function rebuildHtml(text) {
+    var escaped = text.replace(/<\//g, "<\\/");
+    var re = new RegExp('(' + TAG_OPEN + ' id="' + PAYLOAD_ID + '"[^>]*>\\n)[\\s\\S]*?(\\n' + TAG_CLOSE + ')');
+    if (!re.test(window.__ARBOR_SRC__)) return null;   // 源码结构变了就退回「只导出文本」
+    return window.__ARBOR_SRC__.replace(re, function (m, a, b) { return a + escaped + b; });
+  }
+  function download(blob, name) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+  }
+  async function saveAs(blob, name, desc, ext) {
+    if (window.showSaveFilePicker) {       // 能选「保存到哪」，可原地覆盖打开的这个文件
+      try {
+        var h = await window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description: desc, accept: (function () { var o = {}; o["text/" + (ext === "html" ? "html" : "plain")] = ["." + ext]; return o; })() }]
+        });
+        var w = await h.createWritable(); await w.write(blob); await w.close();
+        return true;
+      } catch (e) {
+        if (e && e.name === "AbortError") return false;   // 用户自己取消的
+        /* 其它错就退回下载 */
+      }
+    }
+    download(blob, name);
+    return true;
+  }
+  function treeName() { return (DATA && DATA.name) || "树"; }
+
+  window.__arborExport = {
+    text: currentText,
+    isDirty: function () { return dirty; },
+    rebuilt: function (t) { return rebuildHtml(t || currentText()); },   // 自测用：拿到重建后的整份源码
+    async copy() {
+      var text = currentText(), ta = document.getElementById("exportText");
+      if (ta) ta.value = text;
+      try { await navigator.clipboard.writeText(text); toastMsg("已复制树语言文本 —— 粘到哪儿都行"); }
+      catch (e) {
+        try { ta.removeAttribute("readonly"); ta.select(); document.execCommand("copy"); ta.setAttribute("readonly", ""); toastMsg("已复制树语言文本"); }
+        catch (e2) { toastMsg("请在上面的框里全选复制"); }
+      }
+    },
+    async txt() {
+      var ok = await saveAs(new Blob([currentText()], { type: "text/plain;charset=utf-8" }),
+        treeName() + ".txt", "树语言文本", "txt");
+      if (ok) toastMsg("已导出文本 —— 它就是你的内容，可以贴回仓库或发给别人");
+    },
+    async html() {
+      var src = rebuildHtml(currentText());
+      if (!src) return toastMsg("这份文件的负载块找不到，只能导出文本");
+      var ok = await saveAs(new Blob([src], { type: "text/html;charset=utf-8" }),
+        treeName() + ".html", "含内容的便携版", "html");
+      if (ok) { baseText = currentText(); saveDraft(baseText); setDirty(false); toastMsg("已导出整份 HTML —— 打开它就是现在这个样子"); }
+    },
+    reset() {                              // 丢掉未导出的改动，回到文件里的内容
+      if (!confirm("丢掉还没导出的改动，回到这份 HTML 里的内容？")) return;
+      clearDraft();
+      baseText = payloadText();
+      DATA = rootOf(codeToTree(baseText));
+      curPath = []; curLeaf = 0;
+      setDirty(false); render();
+      toastMsg("已回到文件里的内容");
+    }
+  };
+
+  // ---- 界面：标题栏加一个「导出」按钮 ＋ 导出面板 ----
+  window.addEventListener("load", function () {
+    var bar = document.querySelector(".toolbar");
+    if (bar && !document.getElementById("btnExport")) {
+      var b = document.createElement("button");
+      b.id = "btnExport"; b.className = "ghost"; b.textContent = "导出";
+      bar.appendChild(b);
+      b.onclick = function () {
+        var m = document.getElementById("exportModal");
+        var ta = document.getElementById("exportText");
+        if (ta) ta.value = currentText();
+        var w = document.getElementById("exportWhere");
+        if (w) w.textContent = "这是一份便携版：内容就写在本文件里，程序不需要联网、不需要后端。" +
+          (dirty ? "现在有改动还没导出。" : "现在与文件里的内容一致。");
+        m.classList.add("show");
+      };
+    }
+    setDirty(dirty);
+  });
+
+  window.addEventListener("beforeunload", function (e) {
+    if (dirty) { e.preventDefault(); e.returnValue = ""; }   // 有没导出的改动，别让页面说关就关
+  });
+})();
+
+</script>
+
+<script>
+// ---- 存取：内容从哪读、往哪写 ----
+// 默认＝本地服务（Windows 版的 C# 服务端／WSL 里跑的 serve.js），数据在 data.json。
+// 网页便携版会在前面注入 window.ArborStore 覆盖它：那时内容就写在这份 HTML 自己身上，
+// 不需要任何后端（见 tools/portable-store.js 与 tools/build_web.js）。
+const Store = window.ArborStore || {
+  mediaBase: "/media/",
+  load: () => fetch("/data").then(r=>r.json()),
+  async save(d){
+    const r=await fetch("/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});
+    return (await r.json()).ok;
+  },
+  async uploadImage(name,dataURL){
+    const r=await fetch("/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,data:dataURL})});
+    return await r.json();
+  }
+};
+
+// ---- 数据与状态 ----
+let DATA=null;
+let curPath=[];        // 当前查看枝路径([]{根})
+let curLeaf=0;         // 当前查看的叶下标
+let hist=[];           // 跳转历史,持久化 localStorage
+const LS_KEY="arborinversa_nav";
+
+const $=s=>document.querySelector(s);
+
+// ==== 纯函数区 BEGIN：数据 ＋ 编解码（不碰 DOM；页面、工具与自测共用同一份）====
+// 转义：& < > 之外还要转义引号 —— 属性名/属性值会被拼进 HTML 属性里（value="…"），
+// 少转一个引号就会把属性截断、把后面的内容变成新属性（实测：名称里一个 " 就散架）
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const nodeAt=p=>{let n=DATA;for(const i of p){n=(n.children||[])[i];if(!n)return null;}return n;};
+const isFolder=n=>!!(n.children&&n.children.length);
+
+// 取一个枝的所有叶(兼容旧 desc 字段)
+function leavesOf(n){
+  if(Array.isArray(n.leaves)&&n.leaves.length) return n.leaves;
+  if(typeof n.desc==="string"&&n.desc.trim()) return [{name:"概述",desc:n.desc}];
+  return [{name:"概述",desc:""}];
+}
+const firstLeafText=n=>{const a=leavesOf(n);return (a[0]&&a[0].desc)||"";}
+
+// 属性（props）：键 → 文本 或 文本数组；空对象视作没有属性
+function propsOf(n){
+  const p=(n&&n.props&&typeof n.props==="object"&&!Array.isArray(n.props))?n.props:null;
+  return (p&&Object.keys(p).length)?p:null;
+}
+const hasProps=n=>!!propsOf(n);
+const propValText=v=>Array.isArray(v)?v.join(" "):String(v==null?"":v);
+function propPairs(n){ const p=propsOf(n); return p?Object.keys(p).map(k=>({k:k,v:p[k]})):[]; }
+function propsText(n){ const p=propsOf(n); return p?Object.keys(p).map(k=>k+" "+propValText(p[k])).join(" "):""; };
+// 属性值文本 → 单值或数组：值里用逗号分隔即为多个（解析只有这一份，属性栏／编辑弹窗／文本代码共用）
+function parsePropValue(raw){
+  const parts=String(raw==null?"":raw).split(/[,，]/).map(x=>x.trim()).filter(x=>x);
+  return parts.length? (parts.length>1? parts : parts[0]) : null;
+}
+// 反过来：属性值 → 输入框里的文本（多值用逗号连接，与 parsePropValue 对应）
+const propEditText=v=>Array.isArray(v)? v.join("，"): (v==null?"":String(v));
+
+// ---- 图片的值：平水韵 106 韵目做字表，图片内容哈希 → 五言 ----
+// 为什么用值而不是文件名：文件名会重、会改，两台设备上同名未必同图。
+// 值由**内容**决定，所以同一张图在任何设备上算出来都一样：改名不失效、天然去重、
+// 验得出「同名不同图」，缺图时也能说清缺的是哪一张。
+//
+// ★★ 这张表一个字都不能改 ★★
+// 改一个字，所有已分配的图片值都会变，等于让图库和文本全部对不上。
+// 顺序：上平15 下平15 上声29 去声30 入声17 = 106（平水韵）
+const IMG_TABLE=
+  "東冬江支微魚虞齊佳灰真文元寒刪"+
+  "先蕭肴豪歌麻陽庚青蒸尤侵覃鹽咸"+
+  "董腫講紙尾語麌薺蟹賄軫吻阮旱潸銑篠巧皓哿馬養梗迥有寢感琰豏"+
+  "送宋絳寘未御遇霽泰卦隊震問願翰諫霰嘯效號箇禡漾敬徑宥沁勘豔陷"+
+  "屋沃覺質物月曷黠屑藥陌錫職緝合葉洽";
+const IMG_LEN=5;                               // 五言：106^5 ≈ 134 亿种，一两百张图绰绰有余
+const IMG_CHARS=new Set([...IMG_TABLE]);
+const isImgValue=s=>typeof s==="string" && s.length===IMG_LEN && [...s].every(c=>IMG_CHARS.has(c));
+// 内容哈希（十六进制字符串）→ 值。哈希各端自己算（浏览器 crypto.subtle／Node crypto／C# SHA256），
+// 这里只负责「哈希 → 五个字」这一步，保证三边结果一致。
+function imgValueFromHash(hex){
+  const M=BigInt(IMG_TABLE.length);
+  const x=BigInt("0x"+String(hex||"").slice(0,20));      // 取前 80 bit，够 5×16
+  let out="";
+  for(let i=0;i<IMG_LEN;i++) out+=IMG_TABLE[Number((x>>BigInt(16*(IMG_LEN-1-i)))%M)];
+  return out;
+}
+// 值不带扩展名，而浏览器里没法列目录 —— 按候选扩展名依次试（见 renderRich）
+const IMG_EXTS=["svg","png","jpg","jpeg","webp","gif","bmp","avif"];
+
+// ---- 树遍历：先根后子。数据侧的遍历只留这一份递归，其余都从它派生 ----
+function eachNode(cb,node,path,depth){
+  node=node||DATA; path=path||[]; depth=depth||0;
+  cb(node,path,depth);
+  (node.children||[]).forEach((c,i)=>eachNode(cb,c,path.concat(i),depth+1));
+}
+function eachBranch(f){ eachNode((n,p,d)=>f(n,d,p)); }
+function allPropKeys(){ const set=new Set(); eachNode(n=>{ const p=propsOf(n); if(p) Object.keys(p).forEach(k=>set.add(k)); }); return [...set]; }
+// 候选表（枝名／叶名／属性名／属性值）：一次遍历凑齐，别为一张表走一遍树
+function datalists(){
+  const branches=[], leaves=new Set(), props=new Set(), vals=new Set();
+  eachNode(n=>{
+    branches.push(n.name);
+    leavesOf(n).forEach(l=>leaves.add(l.name||"叶"));
+    const p=propsOf(n); if(!p) return;
+    Object.keys(p).forEach(k=>{ props.add(k); (Array.isArray(p[k])?p[k]:[p[k]]).forEach(x=>vals.add(String(x))); });
+  });
+  return {branches:branches, leaves:[...leaves], props:[...props], vals:[...vals]};
+}
+
+// 名称->路径索引(用于 [[link]])
+function searchIdx(){
+  const idx=new Map();
+  eachNode((n,p)=>idx.set(n.name,p.slice()));
+  return idx;
+}
+function crumbHTML(p){
+  let h=`<a data-jump="[]">${esc(DATA.name)}</a>`;
+  for(let i=0;i<p.length;i++){ h+=` <span style="color:#b9ae9a">›</span> <a data-jump="${JSON.stringify(p.slice(0,i+1))}">${esc(nodeAt(p.slice(0,i+1)).name)}</a>`; }
+  return h;
+}
+function linkify(text){
+  const idx=searchIdx();
+  return esc(text||"").replace(/\[\[([^\]]+)\]\]/g,(m,name)=>{
+    const p=idx.get(name);
+    if(!p) return `<span style="color:#c07a4a">[${esc(name)}?]</span>`;
+    return `<a class="link" data-jump="${JSON.stringify(p)}">${esc(name)}</a>`;
+  });
+}
+// ---- 图片：值是纯值（不带扩展名），浏览器里没法列目录 → 按候选扩展名依次试 ----
+// 试出来的结果记在 imgCache 里：同一个值只试一次；试完都不行就是「缺图」。
+const imgCache=new Map();          // 值/文件名 → 可用地址，或 false（本机没有）
+const imgMissing=new Set();        // 本机缺哪些
+function imgCandidates(ref){
+  if(!isImgValue(ref)) return [Store.mediaBase+encodeURIComponent(ref)];
+  return IMG_EXTS.map(e=>Store.mediaBase+ref+"."+e);
+}
+function imgSrcOf(ref){ return imgCache.has(ref)? imgCache.get(ref) : undefined; }
+function imgMissHTML(ref,cap){
+  return '<figure class="limg"><div class="imgmiss"><span class="imt">这里本应有图</span>'+
+    '<span class="imv">'+esc(ref)+'</span>'+(cap?'<span class="imn">'+esc(cap)+'</span>':'')+
+    '</div></figure>';
+}
+function markMissing(ref){
+  if(!imgMissing.has(ref)){ imgMissing.add(ref); updateMissHint(); }
+}
+function updateMissHint(){
+  const el=$("#missHint"); if(!el) return;
+  el.style.display=imgMissing.size? "" : "none";
+  el.textContent=imgMissing.size? ("· 缺 "+imgMissing.size+" 张图") : "";
+}
+function showMissList(){
+  const host=$("#missList"); if(!host) return;
+  const refs=[...imgMissing];
+  host.innerHTML=refs.length
+    ? refs.map(r=>'<div class="mvopt" style="cursor:default">'+(isImgValue(r)?"值 ":"文件 ")+esc(r)+'</div>').join("")
+    : '<div class="empty">图都在。</div>';
+  $("#missModal").classList.add("show");
+}
+// 图片加载失败：值就换下一个扩展名，试完仍不行（或本来就没扩展名的）→ 占位 ＋ 记一笔
+function bindImgs(root){
+  root.querySelectorAll("figure.limg img").forEach(im=>{
+    im.onerror=()=>{
+      const ref=im.getAttribute("data-ref")||"";
+      const cands=imgCandidates(ref);
+      const i=(parseInt(im.getAttribute("data-cand"),10)||0)+1;
+      if(isImgValue(ref) && i<cands.length){
+        im.setAttribute("data-cand",i); im.src=cands[i]; return;
+      }
+      imgCache.set(ref,false); markMissing(ref);
+      const fig=im.closest("figure.limg");
+      const cap=(fig&&fig.querySelector("figcaption"))? fig.querySelector("figcaption").textContent : "";
+      if(fig) fig.outerHTML=imgMissHTML(ref,cap);
+    };
+    im.onload=()=>{ imgCache.set(im.getAttribute("data-ref")||"", im.getAttribute("src")); };
+  });
+}
+// 全树扫一遍：把没见过的引用都试一次，好一次列全「缺哪几张」
+// （不抢当前渲染，慢慢试；本地文件几乎瞬间返回）
+function scanMissingImgs(){
+  const refs=new Set();
+  eachNode(n=>leavesOf(n).forEach(l=>{
+    for(const m of String(l.desc||"").matchAll(/!\[\[([^\]]+)\]\]/g)){
+      const f=(m[1].split("|")[0]||"").trim(); if(f) refs.add(f);
+    }
+  }));
+  const todo=[...refs].filter(r=>!imgCache.has(r));
+  let i=0;
+  (function next(){
+    if(i>=todo.length){ renderDetail(); return; }   // 扫完重绘一次，占位就都出来了
+    const ref=todo[i++], cands=imgCandidates(ref);
+    let j=0;
+    (function tryOne(){
+      if(j>=cands.length){ imgCache.set(ref,false); markMissing(ref); return next(); }
+      const probe=new Image();
+      probe.onload=()=>{ imgCache.set(ref,cands[j]); next(); };
+      probe.onerror=()=>{ j++; tryOne(); };
+      probe.src=cands[j];
+    })();
+  })();
+}
+
+// 叶内容渲染：先切出 ![[图片]] 片段，其余文本再走 linkify
+// 语法: ![[文件名]]  或  ![[文件名|题注]]
+function renderRich(text){
+  const parts=String(text||"").split(/!\[\[([^\]]+)\]\]/g);
+  let h="";
+  for(let i=0;i<parts.length;i++){
+    if(i%2===0){ h+=linkify(parts[i]); continue; }
+    const seg=parts[i].split("|");
+    const file=(seg[0]||"").trim();
+    const cap=(seg[1]||"").trim();
+    if(!file) continue;
+    const alt=esc(cap||file);
+    const known=imgSrcOf(file);                 // 已经试出来过就直接用，免得再闪一下
+    const src=known===undefined? imgCandidates(file)[0] : known;
+    if(known===false){ h+=imgMissHTML(file,cap); continue; }
+    h+=`<figure class="limg"><img src="${src}" data-ref="${esc(file)}" data-cand="${known===undefined?0:imgCandidates(file).indexOf(known)}" alt="${alt}" loading="lazy">`+
+       (cap?`<figcaption>${esc(cap)}</figcaption>`:"")+`</figure>`;
+  }
+  return h;
+}
+// 纯文本（卡片预览用，去掉图片标记）
+const plainText=s=>String(s||"").replace(/!\[\[[^\]]+\]\]/g,"［图］");
+
+// ==== 树 ⇄ 文本代码 BEGIN（纯函数，不依赖 DOM；测试见 tools/codec.test.js）====
+// 语法：`树 名称`（可作整棵树的标题，只认最上面一行）／`枝 名称`／`叶 名称`
+//      `属性 键: 值`（写在所属「树」或「枝」行下方，与「叶」行同级；值用逗号分隔即为多个）
+//      叶的内容 = 紧跟其后、缩进比该「叶」行更深的所有行（共同缩进会被剥掉）
+const CODE_UNIT="  ";
+function codeIndentOf(line){
+  let n=0;
+  for(const ch of line){
+    if(ch===" ")n+=1; else if(ch==="\t")n+=4; else if(ch==="\u3000")n+=2; else break;
+  }
+  return n;
+}
+function codeStatementOf(t){
+  const m=/^(树|枝|叶|属性)[\s\u3000]+(\S.*)$/.exec(t);
+  if(!m) return null;
+  const kind = m[1]==="树"?"tree" : m[1]==="枝"?"branch" : m[1]==="叶"?"leaf" : "prop";
+  return {kind:kind, name:m[2].trim()};
+}
+// `属性 键: 值` → {k,v}；值用逗号分隔即为多个（返回数组）
+function codePropOf(text){
+  const m=/^([^:：]+)[:：]\s*(.*)$/.exec(text||"");
+  if(!m) return null;
+  const k=m[1].trim(), v=parsePropValue(m[2]);
+  return (k&&v!=null)? {k:k, v:v} : null;
+}
+// 枝的属性 → 代码行（一属性一行）
+function propsToCodeLines(node,pad){
+  const p=(node&&node.props&&typeof node.props==="object"&&!Array.isArray(node.props))?node.props:null;
+  if(!p) return "";
+  let out="";
+  Object.keys(p).forEach(k=>{
+    const v=Array.isArray(p[k])? p[k].join(", ") : p[k];
+    if(k && v!=null && String(v).trim()!=="") out+=pad+"属性 "+k+": "+String(v).trim()+"\n";
+  });
+  return out;
+}
+// 按「列」剥掉行首缩进（列 ≠ 字符数，故不能直接用 slice）
+function codeStripIndent(line,cols){
+  let n=0,i=0;
+  while(i<line.length && n<cols){
+    const ch=line[i];
+    if(ch===" ")n+=1; else if(ch==="\t")n+=4; else if(ch==="\u3000")n+=2; else break;
+    i++;
+  }
+  return line.slice(i);
+}
+// 枝（连它下面的所有枝与叶）→ 文本代码
+function treeToCode(node,depth){
+  const pad=CODE_UNIT.repeat(depth||0);
+  let out=pad+"枝 "+(node.name||"未名枝")+"\n";
+  out+=propsToCodeLines(node,pad+CODE_UNIT);
+  for(const lf of leavesOf(node)){
+    out+=pad+CODE_UNIT+"叶 "+(lf.name||"叶")+"\n";
+    const lines=String(lf.desc==null?"":lf.desc).split("\n");
+    while(lines.length && !lines[lines.length-1].trim()) lines.pop();   // 尾部空行不入码
+    for(const ln of lines) out+=(ln.trim()? pad+CODE_UNIT+CODE_UNIT+ln : "")+"\n";
+    out+="\n";
+  }
+  for(const c of (node.children||[])) out+=treeToCode(c,(depth||0)+1);
+  return out;
+}
+// 文本代码 → {title, leaves, children}；出错抛 SyntaxError（带行号）
+function codeToTree(text){
+  const toks=String(text==null?"":text).replace(/^\uFEFF/,"").replace(/\r\n?/g,"\n").split("\n")
+    .map((s,i)=>({n:i+1,s:s,ind:codeIndentOf(s),t:s.trim()}));
+  let p=0;
+  const bad=(tok,msg)=>{ throw new SyntaxError("第 "+tok.n+" 行："+msg); };
+  function collectContent(leafInd){
+    const buf=[];
+    while(p<toks.length){
+      const L=toks[p];
+      if(!L.t){ buf.push(""); p++; continue; }
+      if(L.ind<=leafInd) break;
+      buf.push(L.s); p++;
+    }
+    while(buf.length && !buf[buf.length-1].trim()) buf.pop();
+    const ins=buf.filter(x=>x.trim()).map(codeIndentOf);
+    const base=ins.length?Math.min.apply(null,ins):0;
+    return buf.map(x=>x.trim()? codeStripIndent(x,base) : "").join("\n");
+  }
+  function parseBlock(minInd){
+    const leaves=[], children=[], props={};
+    while(p<toks.length){
+      const L=toks[p];
+      if(!L.t){ p++; continue; }
+      if(L.ind<=minInd) break;
+      const st=codeStatementOf(L.t);
+      if(!st) bad(L,"只能以「树 名称」「枝 名称」「叶 名称」「属性 键: 值」开头（叶的内容要缩进更深一列）");
+      p++;
+      if(st.kind==="prop"){
+        const pr=codePropOf(st.name);
+        if(!pr) bad(L,"属性要写成「属性 键: 值」");
+        props[pr.k]=pr.v;
+      }else if(st.kind==="leaf"){
+        leaves.push({name:st.name, desc:collectContent(L.ind)});
+      }else{                                  // 枝（以及除首行外出现的「树」）
+        const sub=parseBlock(L.ind);
+        const child={name:st.name, leaves:sub.leaves, children:sub.children};
+        if(Object.keys(sub.props).length) child.props=sub.props;
+        children.push(child);
+      }
+    }
+    return {leaves:leaves, children:children, props:props};
+  }
+  while(p<toks.length && !toks[p].t) p++;
+  let title=null, topInd=-1;
+  if(p<toks.length){
+    const st=codeStatementOf(toks[p].t);
+    if(st && st.kind==="tree"){ title=st.name; topInd=toks[p].ind; p++; }
+  }
+  const body=parseBlock(topInd);
+  const out={title:title, leaves:body.leaves, children:body.children};
+  if(Object.keys(body.props).length) out.props=body.props;
+  return out;
+}
+// ==== 树 ⇄ 文本代码 END ====
+// ==== 纯函数区 END ====
+
+// ---- 渲染 ----
+const eq=(a,b)=>a.length===b.length&&a.every((v,k)=>b[k]===v);      // 同一个枝
+const isPrefix=(a,b)=>a.length<b.length&&a.every((v,k)=>b[k]===v);  // a 是 b 的祖先
+function render(){ renderTree(); renderDetail(); renderHistory(); fillDatalists(); }
+
+function renderTree(){
+  const ul=$("#tree"); ul.innerHTML=""; buildUL(DATA,[],ul);
+}
+function buildUL(node,path,ul){
+  (node.children||[]).forEach((ch,i)=>{
+    const childPath=path.concat(i);
+    const li=document.createElement("li");
+    const row=document.createElement("div");
+    const kids=isFolder(ch);
+    const isActive=eq(childPath,curPath);          // 当前停留枝
+    const isDesc=isPrefix(curPath,childPath);      // 当前枝的后代 → 浅着色
+    const isAncestor=isPrefix(childPath,curPath);  // 当前枝的祖先 → 连线实线加粗
+    row.className="tn "+(kids?"has-kids":"")+(isActive?" active":"")+(isDesc?" tint":"");
+    const leafArr=leavesOf(ch);
+    // 多叶时，在枝名右侧横向列出每片叶的名字
+    const chips=leafArr.length>1
+      ? `<span class="lchips">${leafArr.map(l=>`<span class="lchip">${esc(l.name||"叶")}</span>`).join("")}</span>`
+      : "";
+    row.innerHTML=`<span class="tw">${kids?"▸":"·"}</span><span class="nm">${esc(ch.name)}</span>${chips}`;
+    row.onclick=e=>{ e.stopPropagation(); goto(childPath); };
+    li.appendChild(row);
+    if(kids){
+      const sub=document.createElement("ul");
+      sub.className="nodes"+((isActive||isAncestor)?" active-line":"");
+      buildUL(ch,childPath,sub);
+      li.appendChild(sub);
+    }
+    ul.appendChild(li);
+  });
+}
+
+function renderDetail(){
+  hidePropPop();
+  const n=nodeAt(curPath)||DATA;
+  const d=$("#detail");
+  const leaves=leavesOf(n);
+  if(curLeaf>=leaves.length) curLeaf=0;
+  const kids=(n.children||[]);
+  let h=`<div class="crumb">${crumbHTML(curPath)}</div>`;
+
+  // 枝名 + 右侧横向叶名
+  const tabs=leaves.map((lf,i)=>`<button class="leaf-tab${i===curLeaf?" on":""}" data-leaf="${i}">${esc(lf.name||("叶"+(i+1)))}</button>`).join("");
+  // 枝的说明 + 枝名：同装一列、中心对齐；列宽取两者较宽者，故必有一个左对齐
+  // 属性按钮放在枝名／叶标签**之上**，免得与叶挤在一起；展开的属性栏紧随其下
+  h+=`<div class="props-bar"><button class="propbtn${propOpen?" on":""}" id="propToggle" title="展开／收起属性栏">属性 ⁝</button></div>`;
+  if(propOpen) h+=propPanelHTML(n);
+  h+=`<div class="det-head"><div class="name-col">`+
+     `<span class="pill">${curPath.length? (kids.length? "枝　下含 "+kids.length+" 枝":"枝"):"根"}</span>`+
+     `<h1>${esc(n.name)}</h1></div>`+
+     `<div class="leaf-tabs">${tabs}</div></div>`;
+  // 叶的说明：挂在叶名按钮下方，中心跟随当前叶
+  h+=`<div class="meta-line leaf-meta-line"><span class="pill" id="leafMeta">叶　当前第 ${curLeaf+1} 叶</span></div>`;
+
+  const cur=leaves[curLeaf]||{};
+  const rich=renderRich(cur.desc);
+  h+=`<div class="det-desc">${rich||"<span style='color:#b6ac99'>（这一叶还是空的 —— 点“编辑当前枝”，或在编辑器里展叶）</span>"}</div>`;
+
+  if(kids.length){
+    h+=`<div class="sub"><h3>▼ “${esc(n.name)}” 下的枝</h3><div class="cards">`;
+    kids.forEach((c,i)=>{
+      const preview=plainText(firstLeafText(c)).slice(0,80);
+      h+=`<div class="card" data-jump="${JSON.stringify(curPath.concat(i))}"><div class="cn">${esc(c.name)}</div><div class="cd">${esc(preview)}</div><div class="cm">${isFolder(c)?("下含 "+c.children.length+" 枝"):"无下枝"}</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+  d.innerHTML=h;
+  // 叶切换
+  d.querySelectorAll(".leaf-tab").forEach(el=>{
+    el.onclick=e=>{ e.stopPropagation(); curLeaf=parseInt(el.getAttribute("data-leaf"),10)||0; renderDetail(); };
+  });
+  // 跳转
+  d.querySelectorAll("[data-jump]").forEach(el=>{
+    el.onclick=e=>{ e.stopPropagation(); const p=JSON.parse(el.getAttribute("data-jump")); goto(p); };
+  });
+  bindImgs(d);
+  setReloadHint(n);
+  placeLeafMeta();
+  bindPropPanel();
+  bindPropHover(n);
+}
+
+function renderHistory(){
+  const ul=$("#history"); ul.innerHTML="";
+  if(!hist.length){ ul.innerHTML=`<div class="empty">暂无跳转历史。点任意枝、叶里的 <code>[[链接]]</code> 会记录到这里。</div>`; return; }
+  hist.forEach((h,i)=>{
+    const li=document.createElement("li"); if(i===0) li.classList.add("followed");
+    // 第一行：历史（名称，过窄时可折行）；第二行：位置（单行省略，不随宽度改变）
+    const row=document.createElement("div"); row.className="hrow";
+    row.innerHTML=`<span class="i">${i===0?"●":"○"}</span><span class="t">${esc(h.name)}</span>`;
+    li.appendChild(row);
+    const pos=document.createElement("span"); pos.className="p"; pos.textContent=crumbNamePath(h.path);
+    li.appendChild(pos);
+    li.onclick=()=>{ goto(JSON.parse(JSON.stringify(h.path))); };
+    ul.appendChild(li);
+  });
+}
+function crumbNamePath(p){ let r=DATA.name; for(let i=0;i<p.length;i++){r+=" › "+nodeAt(p.slice(0,i+1)).name;} return r; }
+
+function goto(path,leafIdx){
+  curPath=path; curLeaf=leafIdx||0;
+  hist=hist.filter(h=>h.path.join()!=path.join());
+  const n=nodeAt(path)||DATA;
+  hist.unshift({path:path.slice(), name:n.name, time:Date.now()});
+  localStorage.setItem(LS_KEY,JSON.stringify(hist.slice(0,120)));
+  render();
+}
+function setReloadHint(n){ $("#reloadHint").textContent=n?( "· 当前: "+n.name ):"· 未加载"; }
+
+// ---- 大小可调（左栏、右栏各自拖动；右栏最小可缩到 110px）----
+function bindSplitter(el,which){
+  el.addEventListener("mousedown",e=>{
+    e.preventDefault();
+    const move=(ev)=>{
+      const r=document.querySelector(".workbench").getBoundingClientRect();
+      if(which==="left"){
+        const w=Math.max(110,Math.min(ev.clientX-r.left, r.width*0.5));
+        $("#paneL").style.width=w+"px";
+      }else{
+        const w=Math.max(110,Math.min(r.right-ev.clientX, r.width*0.5));
+        $("#paneR").style.width=w+"px";
+      }
+    };
+    const up=()=>{ document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up); };
+    document.addEventListener("mousemove",move); document.addEventListener("mouseup",up);
+  });
+}
+bindSplitter($("#sl"),"left");
+bindSplitter($("#sr"),"right");
+$("#paneL").style.width="250px"; $("#paneR").style.width="190px";
+
+// ---- 叶说明的位置：中心跟随当前叶按钮 ----
+function placeLeafMeta(){
+  const meta=document.getElementById("leafMeta"); if(!meta) return;
+  const on=document.querySelector("#detail .leaf-tab.on"); if(!on) return;
+  const detail=document.getElementById("detail"); if(!detail) return;
+  const cs=getComputedStyle(detail);
+  const padL=parseFloat(cs.paddingLeft)||0, padR=parseFloat(cs.paddingRight)||0;
+  const origin=detail.getBoundingClientRect().left+padL;   // 内容区左缘
+  const tr=on.getBoundingClientRect();
+  let cx=tr.left-origin+tr.width/2;
+  const w=meta.offsetWidth, inner=detail.clientWidth-padL-padR;
+  cx=Math.max(w/2,Math.min(cx,inner-w/2));
+  meta.style.left=cx.toFixed(1)+"px";
+}
+window.addEventListener("resize",placeLeafMeta);
+if(window.ResizeObserver){ new ResizeObserver(()=>placeLeafMeta()).observe($("#detail")); }
+
+// ---- 属性栏（详情页「属性 ⁝」展开）：每行左边 ⁝ 选常用属性名、右边 ⁝ 选常用值，也可直接填写 ----
+const PROP_KINDS={
+  框架:['类型','别名','标签','版本'],
+  分支树:['类型','学科','别名','标签'],
+  时代:['类型','朝代','年代','标签','关键词','别名'],
+  分类:['类型','标签','别名','关键词'],
+  门类:['类型','标签','别名'],
+  题材:['类型','标签','别名','代表画家','代表作品'],
+  画家:['类型','朝代','生卒','字号','别名','门类','题材','流派','师承','代表作品','标签'],
+  书法家:['类型','朝代','生卒','字号','别名','门类','流派','代表作品','标签'],
+  书画家:['类型','朝代','生卒','字号','别名','门类','题材','流派','代表作品','标签'],
+  流派:['类型','朝代','年代','代表人物','门类','题材','标签','别名'],
+  窑口:['类型','朝代','年代','窑址','釉色','标签'],
+  文物:['类型','朝代','年代','材质','藏地','标签'],
+  遗址:['类型','朝代','年代','地点','标签'],
+  画论:['类型','朝代','作者','出处','关键词','标签'],
+  文化:['类型','朝代','年代','地点','标签'],
+  现象:['类型','朝代','年代','代表人物','标签'],
+  默认:['类型','朝代','年代','门类','题材','流派','别名','标签','关键词']
+};
+const PROP_VALUES={
+  类型:['框架','分支树','时代','分类','门类','题材','画家','书法家','书画家','流派','窑口','遗址','画论','文物','文化','现象'],
+  门类:['绘画','书法','文物','雕塑','工艺'],
+  题材:['人物','山水','花鸟','道释','肖像','风俗','历史','鞍马','墨竹','墨梅','界画'],
+  朝代:['新石器时代','商周','秦汉','魏晋南北朝','隋唐','五代','两宋','北宋','南宋','元代','明','清','近现代'],
+  流派:['元四家','南宋四家','明四家','四王吴恽','扬州八怪','李成传派','海派','吴门画派','宋四家']
+};
+let propOpen=false, propDraft=false;
+function propKindOf(node){
+  const p=propsOf(node), t=p? p['类型'] : null;
+  if(t) return String(Array.isArray(t)? t[0] : t);
+  if(!curPath.length) return '框架';
+  if(curPath.length===1) return '分支树';
+  if(curPath.length===2) return '时代';
+  return (node.children||[]).length? '分类' : '默认';
+}
+function allPropValsOf(key){
+  const set=new Set();
+  eachBranch(n=>{ const p=propsOf(n); if(!p) return; const v=p[key]; if(v==null) return;
+    (Array.isArray(v)?v:[v]).forEach(x=>set.add(String(x))); });
+  return [...set];
+}
+function propKeyOptions(kind,cur){
+  const list=PROP_KINDS[kind]||PROP_KINDS['默认'];
+  return '<option value="">⁝</option>'+list.map(k=>'<option value="'+esc(k)+'"'+(k===cur?' selected':'')+'>'+esc(k)+'</option>').join("");
+}
+function propValueOptions(key,cur){
+  const set=new Set();
+  (PROP_VALUES[key]||[]).forEach(x=>set.add(x));
+  allPropValsOf(key).forEach(x=>set.add(x));
+  const curTxt=Array.isArray(cur)? cur.join('，') : String(cur==null?'':cur);
+  return '<option value="">⁝</option>'+[...set].map(x=>'<option value="'+esc(x)+'"'+(x===curTxt?' selected':'')+'>'+esc(x)+'</option>').join("");
+}
+function propRowHTML(k,v,kind){
+  const val=Array.isArray(v)? v.join('，') : (v==null?'':String(v));
+  return '<div class="prow" data-pk="'+esc(k)+'">'+
+    '<input class="pkey" value="'+esc(k)+'" placeholder="属性名">'+
+    '<select class="pkpick" title="常用属性名">'+propKeyOptions(kind,k)+'</select>'+
+    '<input class="pval" value="'+esc(val)+'" placeholder="属性值（多个用逗号分隔）">'+
+    '<select class="pvpick" title="常用值">'+propValueOptions(k,v)+'</select>'+
+    '<button class="pdel" title="删掉这条">删</button></div>';
+}
+function propPanelHTML(node){
+  const kind=propKindOf(node);
+  const pairs=propPairs(node).map(pr=>propRowHTML(pr.k,pr.v,kind));
+  if(propDraft) pairs.push(propRowHTML('','',kind));
+  return '<div class="props-panel"><div class="ph">属性（类别：'+esc(kind)+'）—— 左边 ⁝ 选常用属性名，右边 ⁝ 选常用值，也可以直接填写；改完自动存回文件</div>'+
+    pairs.join("")+
+    '<div class="prow padd-row"><button class="padd" id="propAdd">＋ 加一条属性</button></div></div>';
+}
+// 读回一组「键值行」：属性栏与编辑弹窗的行长得一样，读法也就这一份。
+// 注意「＋ 加一条属性」那一行也是 .prow，但没有输入框 —— 跳过它（少了这道判断就会抛错）
+function readPropRows(rows){
+  const out=[];
+  [...rows].forEach(r=>{
+    const kEl=r.querySelector(".pkey"), vEl=r.querySelector(".pval");
+    if(!kEl||!vEl) return;
+    out.push({k:kEl.value.trim(), raw:vEl.value.trim(), pk:r.getAttribute("data-pk")||""});
+  });
+  return out;
+}
+// 读回属性栏 → 写回 data.json（结构性改动才重绘，免得打字时丢焦点）
+function collectInlineProps(){
+  let structural=false, dropped=0;
+  const out={};
+  readPropRows(document.querySelectorAll("#detail .prow")).forEach(r=>{
+    const v=parsePropValue(r.raw);
+    if(!r.k){ if(v!=null) dropped++; return; }       // 填了值没填名字 → 不悄悄丢掉，回头提示
+    if(v==null){ structural=true; return; }          // 有名字没值 → 交给 saveInlineProps 还原原值
+    out[r.k]=v;
+    if(r.k!==r.pk) structural=true;
+  });
+  return {props:out, structural:structural, dropped:dropped};
+}
+async function saveInlineProps(){
+  try{
+    const n=nodeAt(curPath)||DATA;
+    const cur=propsOf(n)||{};
+    // 值被清空的行 → 还原成原值，不当作删除（要删除请点「删」按钮）
+    let reverted=false;
+    document.querySelectorAll("#detail .prow").forEach(r=>{
+      const kEl=r.querySelector(".pkey"); if(!kEl) return;
+      const k=kEl.value.trim(), vEl=r.querySelector(".pval");
+      if(k && vEl && !vEl.value.trim() && cur[k]!==undefined){
+        vEl.value=Array.isArray(cur[k])? cur[k].join('，') : String(cur[k]);
+        reverted=true;
+      }
+    });
+    const r=collectInlineProps();
+    if(Object.keys(r.props).length) n.props=r.props; else delete n.props;
+    const ok=await save();
+    fillDatalists();
+    if(r.dropped) toast("有 "+r.dropped+" 行没填属性名，已跳过（补上名字再点别处即可保存）");
+    else if(reverted) toast("属性值不能为空 —— 已还原（要删除请点「删」）");
+    else toast(ok? "属性已保存" : "属性保存失败");
+    if(r.structural||propDraft){ propDraft=false; renderDetail(); }
+  }catch(e){
+    // 以前这里出错是静默的（异步 rejection 没人接）：属性没存上却什么提示都没有
+    toast("属性没能保存："+((e&&e.message)||e));
+  }
+}
+function bindPropPanel(){
+  const t=$("#propToggle");
+  if(t) t.onclick=()=>{ propOpen=!propOpen; propDraft=false; renderDetail(); };
+  const add=$("#propAdd");
+  if(add) add.onclick=()=>{ propDraft=true; propOpen=true; renderDetail();
+    const rows=document.querySelectorAll("#detail .prow .pkey");
+    const last=rows[rows.length-1]; if(last) last.focus(); };
+  document.querySelectorAll("#detail .prow").forEach(row=>{
+    const kEl=row.querySelector(".pkey"); if(!kEl) return;
+    const kPick=row.querySelector(".pkpick"), vEl=row.querySelector(".pval"), vPick=row.querySelector(".pvpick");
+    kEl.onchange=saveInlineProps;
+    vEl.onchange=saveInlineProps;
+    if(kPick) kPick.onchange=()=>{ if(!kPick.value) return; kEl.value=kPick.value; saveInlineProps(); };
+    if(vPick) vPick.onchange=()=>{ if(!vPick.value) return; vEl.value=vPick.value; saveInlineProps(); };
+    const del=row.querySelector(".pdel");
+    if(del) del.onclick=()=>{ row.remove(); saveInlineProps(); };
+  });
+}
+
+// ---- 枝名悬停 1 秒：显示该枝的属性 ----
+let propTimer=null;
+function hidePropPop(){
+  if(propTimer){ clearTimeout(propTimer); propTimer=null; }
+  const e=document.getElementById("propPop"); if(e) e.remove();
+}
+function showPropPop(anchor,node){
+  hidePropPop();
+  const pairs=propPairs(node); if(!pairs.length) return;
+  const box=document.createElement("div"); box.className="prop-pop"; box.id="propPop";
+  box.innerHTML='<div class="pt">属性</div>'+pairs.map(pr=>{
+    const val=Array.isArray(pr.v)? pr.v.map(x=>'<span class="pchip">'+esc(x)+'</span>').join("") : esc(pr.v);
+    return '<div class="pr"><span class="pk">'+esc(pr.k)+'</span><span class="pv">'+val+'</span></div>';
+  }).join("");
+  document.body.appendChild(box);
+  const r=anchor.getBoundingClientRect(), b=box.getBoundingClientRect();
+  let left=r.left, top=r.bottom+7;
+  if(left+b.width>window.innerWidth-8) left=Math.max(8,window.innerWidth-8-b.width);
+  if(top+b.height>window.innerHeight-8) top=Math.max(8,r.top-7-b.height);
+  box.style.left=left+"px"; box.style.top=top+"px";
+}
+function bindPropHover(node){
+  const h1=document.querySelector("#detail h1"); if(!h1||!hasProps(node)||propOpen) return;
+  h1.onmouseenter=()=>{ if(propTimer) clearTimeout(propTimer); propTimer=setTimeout(()=>showPropPop(h1,node),1000); };
+  h1.onmouseleave=()=>hidePropPop();
+}
+
+// ==== 纯函数区 BEGIN：搜索（同上，不碰 DOM）====
+// ==== 搜索 BEGIN ====
+// 限定维度：唯一一份表 —— 条件行的下拉、等价语法、查询词条 三处都从它派生，不会各改各的
+const COND_KINDS=[
+  {k:"prop",  label:"属性",   ph:"属性值",         list:"dlPropVals"},
+  {k:"scope", label:"在枝下", ph:"枝名（含其下）",  list:"dlBranches", field:"下", pre:"下:"},
+  {k:"branch",label:"枝名",   ph:"枝名含",         list:"dlBranches", field:"枝", pre:"枝:"},
+  {k:"leaf",  label:"叶名",   ph:"叶名含",         list:"dlLeaves",   field:"叶", pre:"叶:"},
+  {k:"text",  label:"正文",   ph:"正文含",                            field:"文", pre:"文:"},
+  {k:"depth", label:"深度",   ph:"层级（根=0）",                      field:"深", pre:"深:"},
+  {k:"has",   label:"含有",   ph:"含有",                              field:"含", pre:"含:"},
+  {k:"neg",   label:"排除词", ph:"排除这个词",             neg:true,             pre:"-"}
+];
+const COND_OF={}; COND_KINDS.forEach(d=>COND_OF[d.k]=d);
+const plainSearchText=s=>String(s||"").replace(/!\[[^\]]+\]\]/g," ").replace(/\[\[([^\]]+)\]\]/g,"$1");
+function countIn(hay,needle){
+  const s=String(hay==null?"":hay).toLowerCase(), t=String(needle==null?"":needle).toLowerCase();
+  if(!s||!t) return 0;
+  let n=0,i=0; while(true){ const j=s.indexOf(t,i); if(j<0) break; n++; i=j+t.length; }
+  return n;
+}
+// 结果单位：枝级（枝名/属性）与 叶级（每个叶一条）
+function searchUnits(){
+  const units=[];
+  eachNode((n,path,depth)=>{
+    const base={node:n,path:path.slice(),depth:depth,name:n.name,props:propsText(n),pmap:propsOf(n)||{}};
+    units.push(base);
+    leavesOf(n).forEach((lf,i)=>{
+      units.push(Object.assign({},base,{leaf:lf,leafIdx:i,leafName:lf.name||("叶"+(i+1)),
+        desc:plainSearchText(lf.desc),raw:String(lf.desc==null?"":lf.desc)}));
+    });
+  });
+  return units;
+}
+// 查询 → 词条：普通词 / "短语" / 字段:值 / -排除
+function sTokens(q){
+  const toks=[], re=/"([^"]*)"|(\S+)/g; let m;
+  while((m=re.exec(String(q||"")))!==null){
+    if(m[1]!=null){ if(m[1].trim()) toks.push({phrase:true,text:m[1].trim().toLowerCase()}); continue; }
+    let raw=m[2], neg=false;
+    if(raw[0]==="-"){ neg=true; raw=raw.slice(1); }
+    const c=raw.indexOf(":");
+    if(c>0){
+      const k=raw.slice(0,c).trim(), v=raw.slice(c+1).trim().toLowerCase();
+      if(k&&v){ toks.push({neg:neg,field:k,text:v}); continue; }
+    }
+    if(raw.trim()) toks.push({neg:neg,text:raw.trim().toLowerCase()});
+  }
+  return toks;
+}
+function propHit(map,key,want){
+  const k=Object.keys(map||{}).find(x=>x.toLowerCase().includes(String(key).toLowerCase()));
+  if(!k) return null;
+  const val=propValText(map[k]);
+  return countIn(val,want)? val : null;
+}
+function evalToken(u,t){
+  if(t.field){
+    const f=t.field, v=t.text;
+    if(f==="枝") return (!u.leaf && countIn(u.name,v))? {where:"枝",score:100,text:u.name} : null;
+    if(f==="叶") return (u.leaf && countIn(u.leafName,v))? {where:"叶",score:60,text:u.leafName} : null;
+    if(f==="文") return (u.leaf && countIn(u.desc,v))? {where:"文",score:20,text:u.desc} : null;
+    if(f==="有"){
+      if(u.leaf) return null;
+      const k=Object.keys(u.pmap).find(x=>x.toLowerCase().includes(v));
+      return k? {where:"属性",score:40,text:k} : null;
+    }
+    if(f==="深") return String(u.depth)===v? {where:"深",score:10,text:"第 "+u.depth+" 层"} : null;
+    if(f==="含"){
+      const raw=u.raw||"";
+      if(v==="图"||v==="图片") return (u.leaf && /!\[\[/.test(raw))? {where:"图",score:30,text:"（含插图）"} : null;
+      if(v==="链"||v==="链接"){
+        const n=(raw.match(/\[\[/g)||[]).length-(raw.match(/!\[\[/g)||[]).length;
+        return (u.leaf && n>0)? {where:"链",score:30,text:"（含跳转链接 "+n+" 处）"} : null;
+      }
+      if(v==="下枝"||v==="枝"){
+        const k=(u.node&&u.node.children)?u.node.children.length:0;
+        return (!u.leaf && k>0)? {where:"下枝",score:30,text:"（有下级枝 "+k+" 枝）"} : null;
+      }
+      return null;
+    }
+    const val=propHit(u.pmap,f,v);
+    return val!=null? {where:"属性",score:40,text:val} : null;
+  }
+  let best=null;
+  const put=(where,score,text)=>{ const c=countIn(text,t.text); if(c&&(!best||score>best.score)) best={where:where,score:score,text:text}; };
+  if(u.leaf){ put("叶",60,u.leafName); put("属性",40,u.props); put("文",20,u.desc); }
+  else { put("枝",100,u.name); put("属性",40,u.props); }
+  return best;
+}
+// 排除词（-词）：枝名、属性、叶名、正文 任一处出现即排除
+function evalNeg(u,t){
+  if(t.field) return !!evalToken(u,t);
+  if(countIn(u.name,t.text)>0 || countIn(u.props,t.text)>0) return true;
+  return u.leaf? (countIn(u.leafName,t.text)>0 || countIn(u.desc,t.text)>0) : false;
+}
+function cmpPath(a,b){
+  for(let i=0;i<Math.max(a.length,b.length);i++){
+    const x=a[i]==null?-1:a[i], y=b[i]==null?-1:b[i];
+    if(x!==y) return x-y;
+  }
+  return 0;
+}
+// 枝级约束（枝:／有:／深:／任意属性筛选）单独使用时只列枝，
+// 否则一个枝有几片叶就会重复几行（叶是同一枝的属性，不是各自独立的命中）
+const RESERVED_FIELDS={叶:1,文:1,含:1};
+const isBranchConst=t=>!!(t.field && !RESERVED_FIELDS[t.field] && t.field!=="下" && t.field!=="在");
+// 枝名 → 路径（名字含即可，可命中多棵；「下:元代」用它把范围缩到那棵子树）
+function findPathsByName(name){
+  const want=String(name||"").toLowerCase(), out=[];
+  if(!want) return out;
+  eachNode((n,p)=>{ if(String(n.name||"").toLowerCase().includes(want)) out.push(p.slice()); });
+  return out;
+}
+const inPath=(p,pre)=>pre.every((v,i)=>p[i]===v);
+
+// 查询核心：tokens（可带 hard 标记＝自由词，必须命中）+ opts{combine,scopePath}
+function runQuery(tokens,opts){
+  opts=opts||{};
+  const combine=opts.combine==="or"?"or":"and";
+  const scopes=[], negScopes=[], hard=[], soft=[], hardNeg=[];
+  let badScope=false;
+  const take=(t,list)=>{ const ps=findPathsByName(t.text); if(!ps.length) badScope=true; else ps.forEach(x=>list.push(x)); };
+  (tokens||[]).forEach(t=>{
+    if(t.field==="下"||t.field==="在"){ take(t, t.neg?negScopes:scopes); return; }
+    if(t.neg){ hardNeg.push(t); return; }
+    (t.hard?hard:soft).push(t);
+  });
+  if(opts.scopePath && opts.scopePath.length) scopes.push(opts.scopePath.slice());
+  if(badScope) return [];                                   // 限定的枝名不存在 → 空结果
+  if(!hard.length && !soft.length && !scopes.length) return [];
+  const branchOnly=hard.concat(soft).every(isBranchConst);  // 全为枝级约束（或没有条件）→ 只列枝
+  const hits=[];
+  for(const u of searchUnits()){
+    if(branchOnly && u.leaf) continue;
+    if(scopes.length && !scopes.some(sp=>inPath(u.path,sp))) continue;
+    if(negScopes.length && negScopes.some(np=>inPath(u.path,np))) continue;
+    let drop=false;
+    for(const t of hardNeg) if(evalNeg(u,t)){ drop=true; break; }
+    if(drop) continue;
+    let score=0, first=null, ok=true;
+    for(const t of hard){ const r=evalToken(u,t); if(!r){ ok=false; break; } score+=r.score; if(!first) first=r; }
+    if(!ok) continue;
+    if(soft.length){
+      if(combine==="and"){
+        for(const t of soft){ const r=evalToken(u,t); if(!r){ ok=false; break; } score+=r.score; if(!first) first=r; }
+        if(!ok) continue;
+      }else{
+        let any=null;
+        for(const t of soft){ const r=evalToken(u,t); if(r){ score+=r.score; if(!any) any=r; } }
+        if(!any) continue;
+        if(!first) first=any;
+      }
+    }
+    hits.push({u:u,score:score,where:first?first.where:"限定",text:first?first.text:(u.leaf?u.leafName:u.name)});
+  }
+  hits.sort((a,b)=> b.score-a.score || cmpPath(a.u.path,b.u.path) || ((a.u.leafIdx||0)-(b.u.leafIdx||0)));
+  return hits;
+}
+// 语法文本 → 查询（自由词全部按「必须命中」处理，= 原来的行为）
+function runSearch(q,opts){
+  const toks=sTokens(q);
+  toks.forEach(t=>{ if(!t.neg) t.hard=true; });
+  return toks.length? runQuery(toks,opts) : [];
+}
+// 条件行 → 查询词条（条件之间按 并且/或者，关键词仍然必须命中）
+function rowsToTokens(rows){
+  const out=[];
+  (rows||[]).forEach(r=>{
+    const v=String(r.value==null?"":r.value).trim();
+    if(!v) return;
+    const d=COND_OF[r.kind]; if(!d) return;
+    const t=v.toLowerCase();
+    if(d.k==="prop"){ if(r.key) out.push({field:r.key,text:t}); return; }
+    if(d.neg){ out.push({neg:true,text:t}); return; }
+    out.push({field:d.field,text:t});
+  });
+  return out;
+}
+// 条件行 → 等价语法（用同一张表，所以它和上面的查询永远对得上；点一下可转进关键词框）
+function condSyntax(conds){
+  return (conds||[]).map(c=>{
+    const v=String(c.value==null?"":c.value).trim(); if(!v) return "";
+    const d=COND_OF[c.kind]; if(!d) return "";
+    if(d.k==="prop") return c.key? (c.key+":"+v) : "";
+    return (d.pre||"")+v;
+  }).filter(Boolean).join(" ");
+}
+function runRows(rows,opts){
+  opts=opts||{};
+  const free=opts.free? sTokens(opts.free):[];
+  free.forEach(t=>{ if(!t.neg) t.hard=true; });
+  return runQuery(rowsToTokens(rows).concat(free),opts);
+}
+function highlight(text,terms){
+  const s=String(text==null?"":text), ls=s.toLowerCase(), rs=[];
+  (terms||[]).forEach(t=>{
+    const tt=String(t==null?"":t).toLowerCase(); if(!tt) return;
+    let i=0; while(true){ const j=ls.indexOf(tt,i); if(j<0) break; rs.push([j,j+tt.length]); i=j+tt.length; }
+  });
+  if(!rs.length) return esc(s);
+  rs.sort((a,b)=>a[0]-b[0]||b[1]-a[1]);
+  let out="", cur=0;
+  for(const r of rs){
+    if(r[0]<cur) continue;
+    out+=esc(s.slice(cur,r[0]))+"<mark>"+esc(s.slice(r[0],r[1]))+"</mark>";
+    cur=r[1];
+  }
+  return out+esc(s.slice(cur));
+}
+function snippetAround(text,terms){
+  const s=String(text==null?"":text).replace(/\s+/g," "), ls=s.toLowerCase();
+  let pos=-1;
+  (terms||[]).forEach(t=>{ const j=ls.indexOf(String(t==null?"":t).toLowerCase()); if(j>=0&&(pos<0||j<pos)) pos=j; });
+  if(pos<0) return s.slice(0,60);
+  const a=Math.max(0,pos-22), b=Math.min(s.length,pos+44);
+  return (a>0?"…":"")+s.slice(a,b)+(b<s.length?"…":"");
+}
+// ==== 纯函数区 END ====
+let sRes=[], sSel=-1, sTimer=null;
+function searchJump(i){ const h=sRes[i]; if(!h) return; goto(h.u.path, h.u.leafIdx||0); }
+function renderSearch(){
+  const q=$("#sInput").value.trim(), ul=$("#sres");
+  const terms=sTokens(q).filter(t=>!t.neg).map(t=>t.text);
+  sConds.forEach(c=>{ const v=String(c.value==null?"":c.value).trim();
+    if(v && c.kind!=="has" && c.kind!=="depth") terms.push(v.toLowerCase()); });
+  const on=!!(q||activeCond());
+  $("#sCount").textContent = on? (sRes.length? (sRes.length>200? "命中 "+sRes.length+" 处（示前 200）" : "命中 "+sRes.length+" 处") : "无命中") : "";
+  ul.innerHTML=sRes.slice(0,200).map((h,i)=>{
+    const u=h.u;
+    const title=(u.leaf? esc(u.name)+'<span class="sl">› '+esc(u.leafName)+'</span>' : esc(u.name))+'<span class="sl">'+h.where+'</span>';
+    const body=h.where==="属性"? esc(h.text) : highlight(snippetAround(h.text,terms),terms);
+    return '<li class="sitem'+(i===sSel?" on":"")+'" data-si="'+i+'"><div class="st">'+title+'</div><div class="ss">'+body+'</div></li>';
+  }).join("");
+  ul.querySelectorAll(".sitem").forEach(li=>{ li.onclick=()=>searchJump(parseInt(li.getAttribute("data-si"),10)); });
+}
+// ---- 限定栏：条件行（并行规则）----
+let sConds=[], sCombine="and";
+function fillDatalists(){
+  const put=(sel,vals)=>{ const e=$(sel); if(e) e.innerHTML=vals.map(x=>'<option value="'+esc(x)+'"></option>').join(""); };
+  const d=datalists();
+  put("#dlBranches",d.branches);
+  put("#dlLeaves",d.leaves);
+  put("#dlProps",d.props);
+  put("#dlPropVals",d.vals);
+}
+function renderConds(){
+  const host=$("#sConds"); host.innerHTML="";
+  sConds.forEach((c,i)=>{
+    const row=document.createElement("div"); row.className="cond";
+    let h='<select class="ckind" title="限定维度">'+
+      COND_KINDS.map(d=>'<option value="'+d.k+'"'+(c.kind===d.k?" selected":"")+">"+d.label+"</option>").join("")+'</select>';
+    if(c.kind==="prop") h+='<input class="ckey" list="dlProps" placeholder="属性名" value="'+esc(c.key||"")+'">';
+    if(c.kind==="has"){
+      h+='<select class="cval" title="含有">'+[["图","含插图"],["链","含跳转链接"],["下枝","有下级枝"]]
+        .map(o=>'<option value="'+o[0]+'"'+(c.value===o[0]?" selected":"")+">"+o[1]+"</option>").join("")+'</select>';
+    }else{
+      const d=COND_OF[c.kind]||{ph:"值",list:""};
+      h+='<input class="cval"'+(d.list?' list="'+d.list+'"':"")+' placeholder="'+d.ph+'" value="'+esc(c.value==null?"":c.value)+'">';
+    }
+    h+='<button class="cdel" title="删掉这条">删</button>';
+    row.innerHTML=h;
+    const kindEl=row.querySelector(".ckind");
+    kindEl.onchange=()=>{ c.kind=kindEl.value; c.value=(c.kind==="has"?"图":""); c.key=""; renderConds(); doSearch(); };
+    const keyEl=row.querySelector(".ckey");
+    if(keyEl) keyEl.oninput=()=>{ c.key=keyEl.value.trim(); scheduleSearch(); };
+    const valEl=row.querySelector(".cval");
+    if(valEl){
+      if(valEl.tagName==="SELECT") valEl.onchange=()=>{ c.value=valEl.value; doSearch(); };
+      else valEl.oninput=()=>{ c.value=valEl.value; scheduleSearch(); };
+    }
+    row.querySelector(".cdel").onclick=()=>{ sConds.splice(i,1); renderConds(); doSearch(); };
+    host.appendChild(row);
+  });
+  if(!sConds.length && !allPropKeys().length){
+    const tip=document.createElement("div"); tip.className="snote";
+    tip.textContent="还没有任何属性：在「编辑当前枝」里加一条，这里就能按属性限定了。";
+    host.appendChild(tip);
+  }
+  const syn=condSyntax(sConds), eq=$("#sEquiv");
+  eq.textContent=syn? ("等价语法："+syn+"（点一下转进关键词框）") : "";
+  eq.style.display=syn?"":"none";
+}
+const activeCond=()=>sConds.some(c=>String(c.value==null?"":c.value).trim());
+function scheduleSearch(){ clearTimeout(sTimer); sTimer=setTimeout(doSearch,120); }
+function addCond(){
+  if(allPropKeys().length) sConds.push({kind:"prop",key:"",value:""});
+  else sConds.push({kind:"branch",value:""});
+  renderConds();
+  const box=document.querySelectorAll("#sConds .cond");
+  const last=box[box.length-1]; if(last){ const f=last.querySelector("input"); if(f) f.focus(); }
+}
+function doSearch(){
+  sRes=runRows(sConds,{combine:sCombine,free:$("#sInput").value.trim()});
+  sSel=sRes.length?0:-1;
+  renderSearch();
+}
+$("#sAddCond").onclick=addCond;
+$("#sAddScope").onclick=()=>{ const n=nodeAt(curPath)||DATA; sConds.push({kind:"scope",value:n.name}); renderConds(); doSearch(); };
+$("#sClrCond").onclick=()=>{ sConds=[]; renderConds(); doSearch(); };
+$("#sCombine").onchange=()=>{ sCombine=$("#sCombine").value; doSearch(); };
+$("#sEquiv").onclick=()=>{
+  const syn=condSyntax(sConds); if(!syn) return;
+  const box=$("#sInput"); box.value=(box.value.trim()+" "+syn).trim();
+  sConds=[]; renderConds(); doSearch();
+};
+function switchRight(which){
+  const isS=which==="search";
+  $("#tabSearch").classList.toggle("on",isS);
+  $("#tabHist").classList.toggle("on",!isS);
+  $("#wrapSearch").style.display=isS?"":"none";
+  $("#wrapHist").style.display=isS?"none":"";
+  if(isS){
+    fillDatalists();
+    const w=parseInt($("#paneR").style.width||"0",10);
+    if(w && w<300) $("#paneR").style.width="320px";      // 限定栏在窄栏里挤，进来时先撑开一点
+    renderConds(); doSearch(); $("#sInput").focus();
+  }
+}
+$("#tabHist").onclick=()=>switchRight("hist");
+$("#tabSearch").onclick=()=>switchRight("search");
+$("#sHelpBtn").onclick=()=>{ const e=$("#sHelp"); e.style.display=(e.style.display==="none"?"":"none"); };
+$("#sInput").addEventListener("input",scheduleSearch);          // 与条件行共用同一个防抖
+$("#sInput").addEventListener("keydown",e=>{
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault(); if(!sRes.length) return;
+    sSel=(sSel+(e.key==="ArrowDown"?1:-1)+sRes.length)%sRes.length;
+    renderSearch();
+    const on=document.querySelector("#sres .sitem.on"); if(on&&on.scrollIntoView) on.scrollIntoView({block:"nearest"});
+    return;
+  }
+  if(e.key==="Enter"){ e.preventDefault(); if(sSel>=0) searchJump(sSel); return; }
+  if(e.key==="Escape"){
+    e.preventDefault();
+    if($("#sInput").value){ $("#sInput").value=""; doSearch(); }
+    else if(sConds.length){ sConds=[]; renderConds(); doSearch(); }
+    else switchRight("hist");
+  }
+});
+document.addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&String(e.key).toLowerCase()==="k"){ e.preventDefault(); switchRight("search"); } });
+// ==== 搜索 END ====
+
+// ---- 编辑枝 + 叶 ----
+let editTarget=null;
+let editLeaves=[];
+
+function renderLeafEditor(){
+  const host=$("#mLeaves"); host.innerHTML="";
+  editLeaves.forEach((lf,i)=>{
+    const box=document.createElement("div"); box.className="leafbox";
+    box.innerHTML=`<div class="leafrow"><input class="lname" placeholder="叶名（如 概述 / 形势 / 变迁 / 环）" value="${esc(lf.name||"")}">`+
+      `<button class="limg ghost" title="上传图片并插入到光标处">插图</button>`+
+      `<button class="ldel danger" title="删除这片叶">删除叶</button></div>`+
+      `<textarea class="ldesc" placeholder="这片叶的内容…（[[条目名]] 生成跳转；![[图片名]] 插入图片）">${esc(lf.desc||"")}</textarea>`;
+    const ta=box.querySelector(".ldesc");
+    box.querySelector(".ldel").onclick=()=>{ collectLeaves(); editLeaves.splice(i,1); if(!editLeaves.length) editLeaves.push({name:"概述",desc:""}); renderLeafEditor(); };
+    box.querySelector(".limg").onclick=()=>pickImage(ta);
+    host.appendChild(box);
+  });
+}
+// 图片：选取本地文件 → 上传到 media/ → 在光标处插入 ![[文件名]]
+let imgInput=null;
+function pickImage(ta){
+  if(!imgInput){
+    imgInput=document.createElement("input");
+    imgInput.type="file"; imgInput.accept="image/*"; imgInput.style.display="none";
+    document.body.appendChild(imgInput);
+  }
+  imgInput.value="";
+  imgInput.onchange=async()=>{
+    const f=imgInput.files&&imgInput.files[0];
+    if(!f) return;
+    try{
+      const dataURL=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f);});
+      const j=await Store.uploadImage(f.name,dataURL);
+      if(!j.ok) return toast("图片上传失败: "+(j.error||"未知错误"));
+      insertAtCursor(ta,`![[${j.name}]]`);
+      toast("已插入 ![[${j.name}]] —— 点“保存到文件”后生效");
+    }catch(e){ toast("图片处理失败: "+e.message); }
+  };
+  imgInput.click();
+}
+function insertAtCursor(ta,text){
+  const s=ta.selectionStart==null?ta.value.length:ta.selectionStart;
+  const e=ta.selectionEnd==null?ta.value.length:ta.selectionEnd;
+  ta.value=ta.value.slice(0,s)+text+ta.value.slice(e);
+  ta.selectionStart=ta.selectionEnd=s+text.length;
+  ta.focus();
+}
+function collectLeaves(){
+  const boxes=[...document.querySelectorAll("#mLeaves .leafbox")];
+  if(!boxes.length) return editLeaves;
+  editLeaves=boxes.map(b=>({name:b.querySelector(".lname").value.trim()||"叶", desc:b.querySelector(".ldesc").value}));
+  return editLeaves;
+}
+
+// ---- 属性编辑（值用逗号分隔即为多个 → 数组）----
+let editProps=[];
+function renderPropEditor(){
+  const host=$("#mProps"); host.innerHTML="";
+  editProps.forEach((pr,i)=>{
+    const box=document.createElement("div"); box.className="leafrow";
+    // raw 是「用户原样输入的文本」（尚未解析）；来自数据的则按 propValText 的格式回显
+    const raw=pr.raw!=null? pr.raw : propEditText(pr.v);
+    box.innerHTML=`<input class="pkey" placeholder="属性名（如 别名 / 标签 / 年代）" value="${esc(pr.k||"")}">`+
+      `<input class="pval" placeholder="属性值（多个用逗号分隔）" value="${esc(raw)}">`+
+      `<button class="pdel danger" title="删除这条属性">删除</button>`;
+    box.querySelector(".pdel").onclick=()=>{ collectProps(); editProps.splice(i,1); renderPropEditor(); };
+    host.appendChild(box);
+  });
+}
+function collectProps(){
+  const rows=[...document.querySelectorAll("#mProps .leafrow")];
+  if(rows.length) editProps=readPropRows(rows);
+  return editProps;
+}
+function propsFromEditor(){
+  const out={};
+  collectProps().forEach(pr=>{
+    const v=parsePropValue(pr.raw);
+    if(pr.k&&v!=null) out[pr.k]=v;
+  });
+  return out;
+}
+function openEditor(path){
+  editTarget=path;
+  const n=nodeAt(path)||DATA;
+  $("#mTitle").textContent= path.length? "编辑枝: "+n.name : "编辑: 根";
+  $("#mVia").textContent=crumbNamePath(path);
+  $("#mName").value=n.name||"";
+  editLeaves=JSON.parse(JSON.stringify(leavesOf(n)));
+  renderLeafEditor();
+  editProps=propPairs(n).map(pr=>({k:pr.k,v:pr.v}));
+  renderPropEditor();
+  $("#modal").classList.add("show");
+}
+$("#btnEdit").onclick=()=>openEditor(curPath);
+$("#mAddLeaf").onclick=()=>{ collectLeaves(); editLeaves.push({name:"新叶",desc:""}); renderLeafEditor(); };
+$("#mAddProp").onclick=()=>{ collectProps(); editProps.push({k:"",raw:""}); renderPropEditor(); };
+$("#mCxl").onclick=()=>$("#modal").classList.remove("show");
+$("#mSave").onclick=async()=>{
+  const n=nodeAt(editTarget)||DATA;
+  const nm=$("#mName").value.trim(); if(!nm) return toast("枝名称不能为空");
+  n.name=nm;
+  n.leaves=collectLeaves().map(l=>({name:l.name||"叶",desc:l.desc||""}));
+  delete n.desc;
+  const prNew=propsFromEditor();
+  if(Object.keys(prNew).length) n.props=prNew; else delete n.props;
+  await save(); $("#modal").classList.remove("show"); toast("已写回 data.json"); render();
+};
+
+// ---- 加新枝 ----
+$("#btnAdd").onclick=async()=>{
+  const n=nodeAt(curPath)||DATA;
+  const name=prompt("新枝名称", "新枝");
+  if(!name)return;
+  n.children=n.children||[]; n.children.push({name,leaves:[{name:"概述",desc:""}],children:[]});
+  await save(); goto(curPath.concat(n.children.length-1)); toast("已新增枝");
+};
+
+// ---- 删除当前枝 ----
+$("#btnDel").onclick=async()=>{
+  if(!curPath.length){ return toast("根不能删除"); }
+  const n=nodeAt(curPath); if(!n) return;
+  if(!confirm(`确定删除「${n.name}」吗？\n它下面的 ${(n.children||[]).length} 个枝会一并删除。`)) return;
+  const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
+  parent.children.splice(idx,1);
+  await save();
+  hist=hist.filter(h=>h.path.join()!=curPath.join());
+  goto(curPath.slice(0,-1)); toast("已删除");
+};
+
+// ---- 迁移当前枝 ----
+let mvSel="";                                  // 选中的目标（路径的 JSON 文本，"[]" 表示根）
+function moveDestList(){                       // 除根以外的所有枝，按深度缩进成一张平表
+  const list=[];
+  eachNode((n,p,d)=>{ if(d) list.push({path:p.slice(), label:"　".repeat(d-1)+n.name}); });
+  return list;
+}
+function renderMoveDest(){
+  const host=$("#mvDest"); host.innerHTML="";
+  const add=(label,val)=>{
+    const el=document.createElement("div");
+    el.className="mvopt"+(mvSel===val?" sel":"");
+    el.textContent=label;
+    el.onclick=()=>{ mvSel=val; host.querySelectorAll(".mvopt").forEach(x=>x.classList.remove("sel")); el.classList.add("sel"); };
+    host.appendChild(el);
+  };
+  add("(根) "+DATA.name,"[]");
+  moveDestList().forEach(o=>add(o.label+" (位于:"+crumbNamePath(o.path)+")",JSON.stringify(o.path)));
+}
+$("#btnMove").onclick=()=>{
+  if(!curPath.length) return toast("根不需迁移");
+  const n=nodeAt(curPath); if(!n) return;
+  // 这个弹窗不走通用 .modal/.box：行距与旧版逐像素一致，改动会影响观感
+  const ov=document.createElement("div");
+  ov.className="modal show";
+  ov.style.cssText="position:fixed;inset:0;background:rgba(30,25,18,.5);display:flex;align-items:center;justify-content:center;z-index:100;";
+  ov.innerHTML=`<div class="box" style="background:var(--card);border-radius:13px;width:min(660px,93vw);padding:20px 24px;max-height:92vh;overflow:auto;">
+    <h3 style="font-size:16px;">⇄ 迁移「${esc(n.name)}」到目标位置</h3>
+    <div class="where" style="font-size:11.5px;color:var(--mut);margin:2px 0 8px;">当前在: ${crumbNamePath(curPath)}</div>
+    <label style="display:block;font-size:12px;color:var(--mut);margin:8px 0 4px;">选择目标位置（点下方任一枝，即把当前枝移到它下面）:</label>
+    <div id="mvDest" style="border:1px solid #e3dbcc;border-radius:8px;max-height:280px;overflow:auto;padding:6px;"></div>
+    <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:16px;">
+      <button id="mvCxl">取消</button><button id="mvOk" class="primary">确认迁移</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  mvSel=""; renderMoveDest();
+  $("#mvCxl").onclick=()=>ov.remove();
+  $("#mvOk").onclick=async()=>{
+    if(!mvSel) return toast("请先选一个目标位置");
+    const destPath=JSON.parse(mvSel);
+    const curStr=curPath.join(), destStr=destPath.join();
+    if(destStr===curStr) return toast("不能移到自身");
+    if(curStr && destStr.startsWith(curStr+",")) return toast("不能移到自己的下级内");
+    const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
+    const node=parent.children.splice(idx,1)[0];
+    const dest=nodeAt(destPath)||DATA; dest.children=dest.children||[]; dest.children.push(node);
+    await save(); ov.remove();
+    goto(destPath.concat(dest.children.length-1));
+    toast("已迁移到新位置");
+  };
+};
+
+// ---- 植树：用文本代码导入一棵树 ----
+function openPlant(){
+  const n=nodeAt(curPath)||DATA;
+  $("#plantVia").textContent="种在："+crumbNamePath(curPath)+"（即当前枝「"+n.name+"」之下）";
+  $("#plantModal").classList.add("show");
+  $("#plantCode").focus();
+}
+// 面向 ai 的树语言说明书（原样复制给任意 ai，它就能写这棵树的代码）
+const AI_GUIDE=[
+"你正在为「ArborInversa（逆生树）」写一棵树的文本代码。请严格按下面的规则输出代码，只输出代码本身，不要解释、不要 Markdown 围栏。",
+"",
+"【一、语句】每行一条，共四种，行首关键字必须是 树／枝／叶／属性 之一：",
+"  树 名称        整棵树的标题，只在最上面写一行，可省略",
+"  枝 名称        一根枝（树节点）",
+"  叶 名称        一片叶（挂在枝上的描述板块；一根枝可以有多片叶）",
+"  属性 键: 值    该枝的属性，写在所属枝（或树）那一行的下方、与叶行同级",
+"",
+"【二、缩进】用缩进表示层级，可用 2 个半角空格／1 个 Tab／1 个全角空格；同一层必须一致。",
+"  · 枝的下级：缩进更深的「枝」是它的下级枝，更深的「叶」是它的叶。",
+"  · 叶的内容：紧跟在「叶」后面、缩进比它更深的所有行，都是这片叶的正文。",
+"  · 更深的缩进一律当内容处理，所以叶正文里出现「枝 某某」这样的行不会被误认成结构。",
+"  · 叶正文的共同缩进会被自动剥掉，正文末尾的空行会被裁掉。",
+"",
+"【三、属性】写法 属性 键: 值（冒号半角全角皆可）；值里用逗号分隔表示多个值，会被解析成数组，单个值就是纯文本。",
+"  常用键举例：类型、标签、年代、别名……（属性栏的下拉里有现成的）；键与值都完全自定。不要写空的属性行。",
+"",
+"【四、叶正文里的两种标记】",
+"  [[枝名]]         生成跳转链接（跳到树里同名的那根枝）",
+"  ![[图片文件名]]   插入图片；也可以写成 ![[图片文件名|题注]]",
+"",
+"【五、排版规范】引号一律用『』；段与段之间空一行；提到树里已有的枝名时写成 [[枝名]]。",
+"  同一层级的枝建议用同一套叶名，读起来更整齐（例如每根分类枝都配一片「概述」，或按自己的习惯固定几片叶）。",
+"",
+"【六、例子】",
+"树 示例树",
+"  属性 类型: 示例",
+"  叶 概述",
+"    这是一棵示例树，演示这套框架能做什么。",
+"",
+"  枝 结构",
+"    属性 类型: 分类",
+"    属性 标签: 枝, 叶",
+"    叶 枝",
+"      竖向的是枝，也就是树的节点。",
+"    叶 叶",
+"      横向的是叶，是挂在枝上的正文；一根枝可以挂多片叶。",
+"",
+"  枝 能力",
+"    属性 标签: 跳转, 插图",
+"    叶 跳转",
+"      正文里写 [[结构]] 就会变成一个可点的链接。",
+"    叶 插图",
+"      ![[示例-框架示意.svg|图片可以带题注]]",
+"",
+"【七、输出前自检】每一行的关键字是 树／枝／叶／属性 之一；每片叶的正文都比该叶行缩进更深；属性写在所属枝行下方；没有空属性行。"
+].join("\n");
+
+$("#plantHelpBtn").onclick=()=>{ const e=$("#plantHelp"); e.style.display=(e.style.display==="none"?"":"none"); };
+$("#plantAiBtn").onclick=()=>{
+  const e=$("#plantAi");
+  const show=(e.style.display==="none");
+  e.style.display=show?"":"none";
+  if(show){ const t=$("#plantAiText"); if(!t.value) t.value=AI_GUIDE; t.scrollTop=0; }
+};
+$("#plantAiCopy").onclick=async()=>{
+  const t=$("#plantAiText"); if(!t.value) t.value=AI_GUIDE;
+  t.focus(); t.select();
+  try{ await navigator.clipboard.writeText(t.value); toast("已复制 —— 粘贴给任意 ai 即可"); }
+  catch(err){ try{ document.execCommand("copy"); toast("已复制 —— 粘贴给任意 ai 即可"); }catch(e2){ toast("请手动全选复制"); } }
+};
+$("#btnPlant").onclick=openPlant;
+$("#plantCxl").onclick=()=>$("#plantModal").classList.remove("show");
+$("#plantClear").onclick=()=>{ $("#plantCode").value=""; $("#plantCode").focus(); };
+$("#plantGen").onclick=()=>{
+  const n=nodeAt(curPath)||DATA;
+  $("#plantCode").value=treeToCode(n);
+  toast("已按当前枝生成代码");
+};
+let codeInput=null;
+$("#plantLoad").onclick=()=>{
+  if(!codeInput){
+    codeInput=document.createElement("input");
+    codeInput.type="file"; codeInput.accept=".txt,.tree,.json,text/plain"; codeInput.style.display="none";
+    document.body.appendChild(codeInput);
+  }
+  codeInput.value="";
+  codeInput.onchange=()=>{
+    const f=codeInput.files&&codeInput.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ $("#plantCode").value=String(r.result||"").replace(/^\uFEFF/,""); toast("已读入 "+f.name); };
+    r.onerror=()=>toast("读取失败");
+    r.readAsText(f,"utf-8");
+  };
+  codeInput.click();
+};
+$("#plantCopy").onclick=async()=>{
+  const ta=$("#plantCode"); if(!ta.value) return toast("代码是空的");
+  try{ await navigator.clipboard.writeText(ta.value); toast("已复制到剪贴板"); }
+  catch(e){ ta.select(); document.execCommand("copy"); toast("已复制到剪贴板"); }
+};
+$("#plantOk").onclick=async()=>{
+  const text=$("#plantCode").value;
+  if(!text.trim()) return toast("请先粘贴或生成树的代码");
+  let parsed;
+  try{ parsed=codeToTree(text); }catch(e){ return toast("代码有误 —— "+e.message); }
+  const cur=nodeAt(curPath)||DATA;
+  let roots=[], newLeaves=[];
+  if(parsed.title) roots=[{name:parsed.title, props:parsed.props, leaves:parsed.leaves, children:parsed.children}];
+  else { roots=parsed.children.slice(); newLeaves=parsed.leaves.slice(); }
+  if(!roots.length && !newLeaves.length) return toast("代码里既没有枝也没有叶");
+  delete cur.desc;
+  if(roots.length===1 && !newLeaves.length && roots[0].name===cur.name){
+    if(!confirm("将用代码覆盖当前枝「"+cur.name+"」的全部叶与下枝，确定？")) return;
+    cur.leaves=roots[0].leaves; cur.children=roots[0].children;
+    if(roots[0].props) cur.props=roots[0].props;
+    await save(); $("#plantModal").classList.remove("show"); render();
+    return toast("已就地覆盖当前枝");
+  }
+  cur.children=cur.children||[];
+  let added=0,replaced=0,skipped=0;
+  for(const r of roots){
+    const i=cur.children.findIndex(c=>c.name===r.name);
+    if(i>=0){
+      if(confirm("当前枝下已有「"+r.name+"」，覆盖它？")){ cur.children[i]=r; replaced++; }
+      else skipped++;
+    }else{ cur.children.push(r); added++; }
+  }
+  if(newLeaves.length) cur.leaves=leavesOf(cur).concat(newLeaves);
+  if(!added && !replaced && !newLeaves.length) return toast("未做任何改动");
+  await save(); $("#plantModal").classList.remove("show"); render();
+  toast("已植树：新增 "+added+" 枝、覆盖 "+replaced+" 枝"+(skipped?"、跳过 "+skipped:"")+(newLeaves.length?"、加叶 "+newLeaves.length+" 片":""));
+};
+
+// ---- 保存 ----
+async function save(){
+  try{ return await Store.save(DATA); }catch(e){ return false; }
+}
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
+$("#btnHome").onclick=()=>goto([]);
+$("#missHint").onclick=showMissList;
+$("#missClose").onclick=()=>$("#missModal").classList.remove("show");
+
+// ---- 初始化 ----
+Store.load().then(d=>{
+  DATA=d;
+  hist=JSON.parse(localStorage.getItem(LS_KEY)||"[]");
+  if(!hist.length) hist=[{path:[],name:DATA.name,time:Date.now()}];
+  const cs=document.querySelector("#paneC .scroll"); if(cs) cs.addEventListener("scroll",hidePropPop,{passive:true});
+  render();
+  scanMissingImgs();          // 后台把「缺哪几张图」一次列全
+}).catch(()=>{ $("#detail").innerHTML="<div style='padding:20px;color:#a33;'>无法加载 data.json。<br>请确认 data.json 与程序在同一个文件夹里，然后重开程序。</div>"; });
+</script>
+<script id="tree-data" type="text/plain">
+枝 示例树
+  属性 类型: 示例
+  属性 标签: 框架演示, 入门
+  叶 概述
+    这是一棵演示框架的示例树：结构、叶、属性、跳转、插图都在里面，随便改、随便删。
+    想看真实内容实例（中国美术史），就导随包的《美术史树-试用.txt》。
+
+  枝 结构
+    属性 类型: 分类
+    属性 标签: 枝, 叶, 属性
+    叶 枝
+      竖向的是枝，也就是树的节点。枝往下还能继续长枝，构成整棵树的骨架。
+
+    叶 叶
+      横向的是叶，是挂在枝上的正文。一根枝可以挂多片叶 —— 这根枝上就挂着三片，
+      点枝名右侧的叶名就能横向切换。
+
+    叶 属性
+      枝上还能挂键值对，也就是属性。值用逗号分隔就写成多个：
+      比如这枝的「标签」有三个值，「类型」只有一个。
+
+  枝 能力
+    属性 类型: 分类
+    属性 标签: 跳转, 插图, 深层
+    叶 跳转
+      正文里写 [[结构]] 就会变成一个可点的链接，点一下直接跳到那根枝。
+
+    叶 插图
+      图片放在 media 文件夹里，用下面这一行插进来，竖线后面是题注：
+
+      ![[示例-框架示意.svg|图片可以带题注]]
+
+    叶 深层
+      枝可以一层层往下长，层数不限。
+
+    枝 再深一层
+      属性 类型: 分类
+      叶 还能更深
+        到了这一层还是枝，下面照样可以继续长。
+
+  枝 用法
+    叶 植树
+      任何一枝都能整棵转成「文本代码」，再种到别处：点「植树」→「生成当前枝的代码」。
+      反过来，把代码粘进「植树」的输入框就能长出新枝。本文件最上面那行「树 示例树」
+      就是这棵树的标题行，它下面的内容整体缩进一层。
+
+    叶 搜索
+      右栏切到「搜索」：关键词框 ＋ 限定栏。限定栏不用背语法，点「＋ 条件」按维度加条件，
+      多条条件之间可以「并且」「或者」。这棵树带「标签」属性，可以直接试 标签:跳转。
+
+    叶 交给 ai
+      「植树」弹窗里有「告诉 ai 怎么帮你写」，点开复制那段说明发给任意 ai，
+      它就能按这套写法替你写代码。
+
+
+</script>
+
+<script>
+// 此刻整个文档（含上面的负载块）都解析完了，而渲染还没开始（渲染要等 DOMContentLoaded）
+// —— 所以这一份就是「原样源码」，导出整份 HTML 时只换掉负载块即可。
+window.__ARBOR_SRC__ = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+window.addEventListener("load", function () {
+  var E = window.__arborExport;
+  var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.onclick = fn; };
+  bind("exportCopy", function () { E.copy(); });
+  bind("exportTxt", function () { E.txt(); });
+  bind("exportHtml", function () { E.html(); });
+  bind("exportReset", function () { E.reset(); document.getElementById("exportModal").classList.remove("show"); });
+  bind("exportClose", function () { document.getElementById("exportModal").classList.remove("show"); });
+  var m = document.getElementById("exportModal");
+  if (m) m.onclick = function (e) { if (e.target === m) m.classList.remove("show"); };
+});
+</script>
+</body>
+</html>

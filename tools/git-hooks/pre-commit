@@ -1,6 +1,7 @@
 #!/bin/sh
 # 提交前自检（启用方式：git config core.hooksPath tools/git-hooks）
-#   1) 编解码自测  2) 搜索/属性自测  3) 示例树自测（不依赖个人内容）  4) 仓库 data.json 仍是示例树
+#   1) 编解码自测  2) 搜索/属性自测  3) 示例树自测（不依赖个人内容）
+#   4) 线上那份便携版（docs/index.html）是否最新  5) 仓库 data.json 仍是示例树
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
@@ -12,6 +13,13 @@ node tools/search.test.js > /dev/null || { echo "× 搜索自测未通过，提�
 
 echo "· 示例树自测…"
 node tools/tree.test.js > /dev/null || { echo "× 示例树自测未通过，提交中止"; exit 1; }
+
+echo "· 检查线上那份便携版是否最新…"
+node tools/build_web.js --check > /dev/null || {
+  echo "× docs/index.html 过期了（改了 index.html 或示例树后忘了重新生成）"
+  echo "  跑：node tools/build_web.js 示例树.txt docs/index.html"
+  exit 1
+}
 
 echo "· 检查仓库 data.json（应为示例树）…"
 node tools/check_data.js --repo-only || {
