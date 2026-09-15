@@ -205,20 +205,21 @@
      手机上没有 hover、没有分隔条可拖、地址栏还会伸缩，所以这几处都要另作安排。 */
   .navbtn,.pane-close,.sheet-tgl,.scrim{display:none;}      /* 只在手机版出现 */
   html.is-mobile{-webkit-text-size-adjust:100%;}
-  html.is-mobile body{height:100vh;height:100dvh;overscroll-behavior:none;}
-  /* 顶栏：品牌缩一号；按钮仍全在顶栏，排成一条可以左右滑的带子 */
-  html.is-mobile header{padding:0 10px;gap:8px;}
+  /* 顶栏两行（用户定的排法）：第一行 ☰ ＋ 品牌名，第二行整行都是编辑按钮、可左右滑。
+     整个 body 竖着排，顶栏自然高度、正文吃剩下的 —— 别再把顶栏高度写死 52px */
+  html.is-mobile body{height:100vh;height:100dvh;display:flex;flex-direction:column;overscroll-behavior:none;}
+  html.is-mobile header{height:auto;flex:none;flex-wrap:wrap;padding:6px 10px 7px;gap:6px 8px;}
   html.is-mobile .brand{font-size:15px;flex:none;}
   html.is-mobile .brand small{display:none;}
   html.is-mobile #reloadHint{display:none;}                 /* 「当前: data.json」在手机上没意义 */
-  html.is-mobile #missHint{flex:none;margin-left:0;}
-  html.is-mobile .navbtn{display:block;flex:none;font-size:15px;padding:0 10px;min-height:36px;}
-  html.is-mobile .toolbar{flex:1 1 auto;min-width:0;margin-left:0;flex-wrap:nowrap;
+  html.is-mobile #missHint{flex:none;margin-left:auto;}     /* 缺图提示靠右，与品牌同一行 */
+  html.is-mobile .navbtn{display:block;flex:none;font-size:15px;padding:0 11px;min-height:34px;}
+  html.is-mobile .toolbar{flex:1 0 100%;min-width:0;margin-left:0;flex-wrap:nowrap;
     overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
   html.is-mobile .toolbar::-webkit-scrollbar{display:none;}
-  html.is-mobile .toolbar button{flex:none;white-space:nowrap;min-height:36px;font-size:13px;padding:6px 12px;}
+  html.is-mobile .toolbar button{flex:none;white-space:nowrap;min-height:34px;font-size:13px;padding:6px 12px;}
   /* 正文铺满：底下给「收起状态的标签栏」留出一条 */
-  html.is-mobile .workbench{height:calc(100vh - 52px);height:calc(100dvh - 52px);
+  html.is-mobile .workbench{flex:1 1 auto;height:auto;min-height:0;
     padding-bottom:calc(44px + env(safe-area-inset-bottom));}
   html.is-mobile .splitter{display:none;}                   /* 栏都成浮层了，没有可拖的分隔条 */
   html.is-mobile #detail{padding:14px 15px 96px;}
@@ -265,10 +266,6 @@
   html.is-mobile .box textarea.code{min-height:36vh;font-size:12.5px;}
   html.is-mobile .box .acts button{min-height:38px;flex:1;}
   html.is-mobile .toast{bottom:calc(56px + env(safe-area-inset-bottom));}
-  /* 320px 那一档（iPhone SE）：品牌名让位给按钮，顶栏只剩 ☰ 和按钮带 */
-  @media (max-width:360px){
-    html.is-mobile .brand{display:none;}
-  }
   /* 手机横屏（竖着没多少地方）：题词暂时让位，正文比它要紧 */
   @media (max-height:430px){
     html.is-mobile .epigraph{display:none;}
