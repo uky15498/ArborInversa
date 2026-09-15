@@ -170,8 +170,9 @@
     padding:4px 7px;margin:2px 0 7px;cursor:pointer;word-break:break-all;}
   .snote{font-size:10.5px;color:#a99e8e;line-height:1.6;padding:1px 2px 5px;}
   /* 详情页：属性按钮 + 展开的属性栏 */
-  .props-bar{display:flex;justify-content:flex-end;margin:0 0 5px;}
-  .propbtn{flex:none;border:1px solid #cbc1b2;background:#fff;color:#4a443a;
+  /* 「属性 ⁝」与枝名上方那颗描述同一行、同高，靠右 —— 不再单独占一行把枝名压下去 */
+  .propbtn{flex:none;align-self:flex-start;margin-left:auto;
+    border:1px solid #cbc1b2;background:#fff;color:#4a443a;
     padding:3px 11px;border-radius:14px;font-size:12px;cursor:pointer;letter-spacing:.5px;}
   .propbtn:hover{background:#f2ecdf;}
   .propbtn.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
@@ -714,12 +715,13 @@ function renderDetail(){
   const tabs=leaves.map((lf,i)=>`<button class="leaf-tab${i===curLeaf?" on":""}" data-leaf="${i}">${esc(lf.name||("叶"+(i+1)))}</button>`).join("");
   // 枝的说明 + 枝名：同装一列、中心对齐；列宽取两者较宽者，故必有一个左对齐
   // 属性按钮放在枝名／叶标签**之上**，免得与叶挤在一起；展开的属性栏紧随其下
-  h+=`<div class="props-bar"><button class="propbtn${propOpen?" on":""}" id="propToggle" title="展开／收起属性栏">属性 ⁝</button></div>`;
   if(propOpen) h+=propPanelHTML(n);
   h+=`<div class="det-head"><div class="name-col">`+
      `<span class="pill">${curPath.length? (kids.length? "枝　下含 "+kids.length+" 枝":"枝"):"根"}</span>`+
      `<h1>${esc(n.name)}</h1></div>`+
-     `<div class="leaf-tabs">${tabs}</div></div>`;
+     `<div class="leaf-tabs">${tabs}</div>`+
+     `<button class="propbtn${propOpen?" on":""}" id="propToggle" title="展开／收起属性栏">属性 ⁝</button>`+
+     `</div>`;
   // 叶的说明：挂在叶名按钮下方，中心跟随当前叶
   h+=`<div class="meta-line leaf-meta-line"><span class="pill" id="leafMeta">叶　当前第 ${curLeaf+1} 叶</span></div>`;
 
