@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="330" viewBox="0 0 720 330">
+  <rect width="720" height="330" fill="#faf8f4"/>
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif">
+
+    <!-- 竖排：枝 -->
+    <text x="40" y="34" font-size="15" fill="#7c715f">竖向的是「枝」—— 树的节点</text>
+    <rect x="40" y="52" width="150" height="46" rx="7" fill="#e3ece4" stroke="#8fb3a1" stroke-width="2"/>
+    <text x="115" y="81" font-size="16" fill="#2c2822" text-anchor="middle">中国美术史</text>
+
+    <line x1="115" y1="98" x2="115" y2="126" stroke="#8fb3a1" stroke-width="2"/>
+    <rect x="40" y="126" width="150" height="46" rx="7" fill="#e3ece4" stroke="#8fb3a1" stroke-width="2"/>
+    <text x="115" y="155" font-size="16" fill="#2c2822" text-anchor="middle">隋唐</text>
+    <!-- 属性：挂在枝上的键值对 -->
+    <rect x="40" y="180" width="150" height="24" rx="12" fill="#eef3ea" stroke="#d8e4d2"/>
+    <text x="115" y="197" font-size="12" fill="#5b7a68" text-anchor="middle">属性　类型: 时代</text>
+
+    <line x1="115" y1="212" x2="115" y2="240" stroke="#8fb3a1" stroke-width="2"/>
+    <rect x="40" y="240" width="150" height="46" rx="7" fill="#e3ece4" stroke="#8fb3a1" stroke-width="2"/>
+    <text x="115" y="269" font-size="16" fill="#2c2822" text-anchor="middle">吴道子</text>
+
+    <!-- 横排：叶 -->
+    <text x="300" y="34" font-size="15" fill="#7c715f">横向的是「叶」—— 挂在枝上的正文，一枝可以多片</text>
+    <line x1="190" y1="149" x2="290" y2="149" stroke="#cfc3ae" stroke-width="2" stroke-dasharray="5 4"/>
+    <rect x="290" y="92" width="390" height="114" rx="7" fill="#fffdf8" stroke="#cfc3ae" stroke-width="2"/>
+    <text x="306" y="118" font-size="14" fill="#2f5d50">叶　形势</text>
+    <text x="306" y="142" font-size="13" fill="#3a342b">国势强盛、丝路畅通，长安成为国际都会；</text>
+    <text x="306" y="164" font-size="13" fill="#3a342b">三教并行，宗教壁画与宫廷绘画俱盛。</text>
+    <text x="306" y="192" font-size="13" fill="#8d857a">正文里还能写 [[吴道子]] 跳转、插图片</text>
+
+    <rect x="290" y="216" width="390" height="34" rx="7" fill="#fbf8f2" stroke="#e7dfd0"/>
+    <text x="306" y="238" font-size="13" fill="#645c4d">叶名　变迁　　叶名　环　　…… 同一根枝下可以有好多片</text>
+
+    <text x="40" y="312" font-size="12.5" fill="#a99e8e">一句话：枝管结构（竖向），叶管内容（横向），属性是枝上的标签。</text>
+  </g>
+</svg>

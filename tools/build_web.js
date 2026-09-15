@@ -176,10 +176,25 @@ if (syntaxBad.length) syntaxBad.forEach(x => console.error('    内联脚本语�
 if (bad.length) { console.error('× 自检没过，产物不可信'); process.exit(1); }
 console.log('✓ 便携版已生成 —— 双击即可打开，不需要后端');
 // 线上那份还要把示例树用到的插图放到同级 media/（浏览器没法列目录，路径得对得上）
+// ★ 只同步**这棵树真正引用到的**图，绝不整目录拷：media/ 里放个人素材时（它被 .gitignore 挡着
+//   没进库，但文件就在磁盘上），整目录拷会把不该公开的东西一起带进 docs/ 并提交出去。
 if (path.resolve(out) === path.resolve(DOCS)) {
+  const refs = new Set();
+  for (const m of canonical.matchAll(/!\[\[([^\]]+)\]\]/g)) {
+    const nm = (m[1].split('|')[0] || '').trim();
+    if (nm) refs.add(nm);
+  }
   const src = path.join(REPO, 'media'), dst = path.join(path.dirname(out), 'media');
+  fs.rmSync(dst, { recursive: true, force: true });        // 清掉上一次的，免得旧图留在库里
   fs.mkdirSync(dst, { recursive: true });
-  let n = 0;
-  for (const f of fs.readdirSync(src)) { fs.copyFileSync(path.join(src, f), path.join(dst, f)); n++; }
-  console.log('  同步插图 ' + n + ' 个 → ' + path.relative(REPO, dst) + '/');
+  const copied = [], absent = [];
+  for (const ref of refs) {
+    let file = null;
+    if (fs.existsSync(path.join(src, ref))) file = ref;                       // 按文件名写的
+    else if (fs.existsSync(src)) file = fs.readdirSync(src).find(f => path.parse(f).name === ref) || null;  // 按值写的
+    if (file) { fs.copyFileSync(path.join(src, file), path.join(dst, file)); copied.push(file); }
+    else absent.push(ref);
+  }
+  console.log('  同步插图 ' + copied.length + ' 个 → ' + path.relative(REPO, dst) + '/' + (copied.length ? '（' + copied.join('、') + '）' : ''));
+  if (absent.length) console.log('  引用但图库里没有（线上会显示占位框）：' + absent.join('、'));
 }

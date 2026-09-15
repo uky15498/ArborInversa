@@ -26,7 +26,10 @@ data.before-*.json
 data.backup.json
 media/*
 # 例外：示例树要用的插图（框架自带的演示素材）必须进库
-!media/示例-框架示意.svg
+# 注意命名：示例-框架示意.svg 已按新约定改名成它的「值」尾豏魚賄尾.svg
+# （值＝图片内容算出来的五言，见 index.html 里的 IMG_TABLE；改名后正文引用也要跟着改）
+!media/尾豏魚賄尾.svg
+!media/示例-枝叶结构.svg
 
 # 本地运维/AI 交接笔记：给新对话看的碎碎念，只在本机，不进仓库
 开发笔记.md

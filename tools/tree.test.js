@@ -79,7 +79,15 @@ const MEDIA_DIRS = (mi >= 0 && process.argv[mi + 1])
   ? [process.argv[mi + 1]]
   : [path.join(path.dirname(path.resolve(FIXTURE)), 'media'), path.join(REPO, 'media'),
      '/mnt/c/ArborInversa/media'].filter(d => fs.existsSync(d));
-const hasImage = f => MEDIA_DIRS.some(d => fs.existsSync(path.join(d, f)));
+// 与应用同一套找法：
+//   · 写了文件名（带扩展名）→ 按文件名找
+//   · 只写了「值」（平水韵五言，不带扩展名）→ 找「去掉扩展名后等于该值」的文件
+//     （浏览器里没法列目录，应用是依次试候选扩展名实现的，效果等价）
+const hasImage = f => MEDIA_DIRS.some(d => {
+  if (fs.existsSync(path.join(d, f))) return true;
+  if (/\.[a-z0-9]+$/i.test(f)) return false;
+  try { return fs.readdirSync(d).some(x => path.parse(x).name === f); } catch (e) { return false; }
+});
 
 let pass = 0, fail = 0;
 function ok(title, fn) {
@@ -143,15 +151,24 @@ ok('所有 [[跳转]] 都指向存在的枝', () => {
   }));
   assert.deepStrictEqual([...new Set(bad)], []);
 });
-ok('所有 ![[图片]] 在 media/ 里都存在', () => {
+// 示例树里**故意**放了一张不存在的图，用来演示「缺图时画占位框」。
+// 它必须在下面这份名单里，否则这条断言就该失败 —— 免得哪天真的漏图却被当成「故意的」。
+const DELIBERATELY_MISSING = new Set(['東冬江支微']);
+ok('所有 ![[图片]] 在 media/ 里都存在（除示例里故意缺的那张）', () => {
   const missing = [];
   walk(ROOT, n => (n.leaves || []).forEach(l => {
     for (const m of String(l.desc || '').matchAll(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-      if (!hasImage(m[1].trim())) missing.push(m[1].trim());
+      const ref = m[1].trim();
+      if (!hasImage(ref) && !DELIBERATELY_MISSING.has(ref)) missing.push(ref);
     }
   }));
   assert.deepStrictEqual([...new Set(missing)], [],
     '这些图在以下目录都没找到：' + MEDIA_DIRS.map(d => path.relative(REPO, d) || '.').join('、'));
+});
+ok('示例树里那张「故意缺的图」确实不在库里（占位框演示才有意义）', () => {
+  for (const ref of DELIBERATELY_MISSING) {
+    assert.ok(!hasImage(ref), ref + ' 竟然在库里了 —— 那占位框就演示不出来了，请换一个值');
+  }
 });
 ok('treeToCode → codeToTree 除既定的规范化外不改变内容', () => {
   const back = codeToTree(treeToCode(ROOT));
