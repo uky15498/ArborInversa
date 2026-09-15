@@ -92,7 +92,6 @@
   #history li .p{display:block;color:var(--mut);font-size:10.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   #history li.followed{opacity:.45;}
   .empty{color:#b6ac99;font-size:12px;padding:10px;}
-  .mvlist{border:1px solid #e3dbcc;border-radius:8px;max-height:280px;overflow:auto;padding:6px;}
   .mvopt{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0e9dc;display:flex;gap:6px;align-items:center;}
   .mvopt:hover{background:#f2ecdf;}
   .mvopt.sel{background:#e3ece4;color:var(--accent);font-weight:600;}
@@ -101,7 +100,6 @@
   .modal{position:fixed;inset:0;background:rgba(30,25,18,.5);display:none;align-items:center;justify-content:center;z-index:100;}
   .modal.show{display:flex;}
   .box{background:var(--card);border-radius:13px;width:min(680px,93vw);padding:20px 24px;max-height:92vh;overflow:auto;}
-  .box.mid{width:min(660px,93vw);}          /* 迁移弹窗：与原来一样窄一点 */
   .box h3{font-size:16px;}
   .box .where{font-size:11.5px;color:var(--mut);margin:2px 0 6px;}
   .box label{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px;}
@@ -307,15 +305,6 @@
       <button id="plantCxl">取消</button>
       <button id="plantOk" class="primary">植树</button>
     </div>
-  </div>
-</div>
-<div class="modal" id="moveModal">
-  <div class="box mid">
-    <h3 id="mvTitle">⇄ 迁移</h3>
-    <div class="where" id="mvVia"></div>
-    <label>选择目标位置（点下方任一枝，即把当前枝移到它下面）:</label>
-    <div class="mvlist" id="mvDest"></div>
-    <div class="acts"><button id="mvCxl">取消</button><button id="mvOk" class="primary">确认迁移</button></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -1351,24 +1340,34 @@ function renderMoveDest(){
 $("#btnMove").onclick=()=>{
   if(!curPath.length) return toast("根不需迁移");
   const n=nodeAt(curPath); if(!n) return;
-  $("#mvTitle").textContent="⇄ 迁移「"+n.name+"」到目标位置";
-  $("#mvVia").textContent="当前在: "+crumbNamePath(curPath);
+  // 这个弹窗不走通用 .modal/.box：行距与旧版逐像素一致，改动会影响观感
+  const ov=document.createElement("div");
+  ov.className="modal show";
+  ov.style.cssText="position:fixed;inset:0;background:rgba(30,25,18,.5);display:flex;align-items:center;justify-content:center;z-index:100;";
+  ov.innerHTML=`<div class="box" style="background:var(--card);border-radius:13px;width:min(660px,93vw);padding:20px 24px;max-height:92vh;overflow:auto;">
+    <h3 style="font-size:16px;">⇄ 迁移「${esc(n.name)}」到目标位置</h3>
+    <div class="where" style="font-size:11.5px;color:var(--mut);margin:2px 0 8px;">当前在: ${crumbNamePath(curPath)}</div>
+    <label style="display:block;font-size:12px;color:var(--mut);margin:8px 0 4px;">选择目标位置（点下方任一枝，即把当前枝移到它下面）:</label>
+    <div id="mvDest" style="border:1px solid #e3dbcc;border-radius:8px;max-height:280px;overflow:auto;padding:6px;"></div>
+    <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:16px;">
+      <button id="mvCxl">取消</button><button id="mvOk" class="primary">确认迁移</button>
+    </div></div>`;
+  document.body.appendChild(ov);
   mvSel=""; renderMoveDest();
-  $("#moveModal").classList.add("show");
-};
-$("#mvCxl").onclick=()=>$("#moveModal").classList.remove("show");
-$("#mvOk").onclick=async()=>{
-  if(!mvSel) return toast("请先选一个目标位置");
-  const destPath=JSON.parse(mvSel);
-  const curStr=curPath.join(), destStr=destPath.join();
-  if(destStr===curStr) return toast("不能移到自身");
-  if(curStr && destStr.startsWith(curStr+",")) return toast("不能移到自己的下级内");
-  const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
-  const node=parent.children.splice(idx,1)[0];
-  const dest=nodeAt(destPath)||DATA; dest.children=dest.children||[]; dest.children.push(node);
-  await save(); $("#moveModal").classList.remove("show");
-  goto(destPath.concat(dest.children.length-1));
-  toast("已迁移到新位置");
+  $("#mvCxl").onclick=()=>ov.remove();
+  $("#mvOk").onclick=async()=>{
+    if(!mvSel) return toast("请先选一个目标位置");
+    const destPath=JSON.parse(mvSel);
+    const curStr=curPath.join(), destStr=destPath.join();
+    if(destStr===curStr) return toast("不能移到自身");
+    if(curStr && destStr.startsWith(curStr+",")) return toast("不能移到自己的下级内");
+    const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
+    const node=parent.children.splice(idx,1)[0];
+    const dest=nodeAt(destPath)||DATA; dest.children=dest.children||[]; dest.children.push(node);
+    await save(); ov.remove();
+    goto(destPath.concat(dest.children.length-1));
+    toast("已迁移到新位置");
+  };
 };
 
 // ---- 植树：用文本代码导入一棵树 ----
