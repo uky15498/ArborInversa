@@ -2,6 +2,7 @@
 // 用法：cd /home/elu/test/doc-tool/daosheng-tree && node tools/search.test.js
 // 特点：直接抽取 index.html 里的真实实现来跑（不依赖浏览器、不依赖 DOM）。
 const fs = require('fs'), path = require('path'), assert = require('assert');
+const { loadPure } = require('./codec-from-html');
 
 const HTML = path.join(__dirname, '..', 'index.html');
 const DATA = process.env.DATA || '/mnt/c/ArborInversa/data.json';
@@ -12,14 +13,14 @@ function slice(a, b, what) {
   assert(i >= 0 && j > i, 'index.html 里找不到：' + what);
   return src.slice(i, j);
 }
-const escSrc    = src.match(/const esc=s=>String\(s\?\?[^\n]*\n/)[0];
-const leavesSrc = src.match(/function leavesOf\(n\)\{[\s\S]*?\n\}/)[0];
-const propsSrc  = slice('function propsOf(n){', '\nfunction crumbHTML', '属性 helpers');
-const searchSrc = slice('// ==== 搜索 BEGIN ====', 'let sRes=[]', '搜索引擎');
+// 纯函数区＝index.html 里标了「纯函数区 BEGIN…END」的区块（不碰 DOM）。整段抽出来跑，
+// 页面里跑的就是这份；边界由标记定，不靠正则去猜某个函数的结尾。
+const pureSrc   = loadPure();
+const searchSrc = pureSrc;
 
-const api = new Function('DATA', escSrc + '\n' + leavesSrc + '\n' + propsSrc + '\n' + searchSrc +
-  '\nreturn {esc,leavesOf,propsOf,propPairs,propsText,propValText,sTokens,searchUnits,runSearch,' +
-  'runQuery,runRows,rowsToTokens,findPathsByName,inPath,isBranchConst,highlight,snippetAround};');
+const api = new Function('DATA', pureSrc +
+  '\nreturn {esc,leavesOf,propsOf,propPairs,propsText,propValText,parsePropValue,sTokens,searchUnits,runSearch,' +
+  'runQuery,runRows,rowsToTokens,condSyntax,findPathsByName,inPath,isBranchConst,highlight,snippetAround};');
 
 // 这套自测是拿一份**真实内容数据**当夹具的；本仓库只放框架、不含内容，
 // 所以没有数据文件时给出清楚提示并跳过（换台机器跑也不会崩一堆堆栈）

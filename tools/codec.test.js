@@ -2,20 +2,14 @@
 // 用法：cd /home/elu/test/doc-tool/daosheng-tree && node tools/codec.test.js
 // 特点：直接抽取 index.html 里的真实实现来测（测的就是页面里跑的那份代码），不依赖浏览器。
 const fs = require('fs'), path = require('path'), assert = require('assert');
+const { loadPure } = require('./codec-from-html');
 
 const here = __dirname;
 const HTML = path.join(here, '..', 'index.html');
 const DATA = process.env.DATA || '/mnt/c/ArborInversa/data.json';
-const src = fs.readFileSync(HTML, 'utf8');
 
-function between(a, b) {
-  const i = src.indexOf(a), j = src.indexOf(b);
-  assert(i >= 0 && j > i, 'index.html 里找不到标记：' + a);
-  return src.slice(i, j + b.length);
-}
-const leavesOfSrc = src.match(/function leavesOf\(n\)\{[\s\S]*?\n\}/)[0];
-const codecSrc = between('// ==== 树 ⇄ 文本代码 BEGIN', '// ==== 树 ⇄ 文本代码 END ====');
-const api = new Function(leavesOfSrc + '\n' + codecSrc +
+// 纯函数区整段抽出来跑（页面里跑的就是这份；边界由 index.html 里的标记定，不靠正则猜）
+const api = new Function(loadPure() +
   '\nreturn {leavesOf,treeToCode,codeToTree,codeIndentOf,codeStatementOf,codeStripIndent};')();
 const { leavesOf, treeToCode, codeToTree, codeIndentOf, codeStatementOf } = api;
 

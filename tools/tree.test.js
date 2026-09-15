@@ -28,7 +28,7 @@
 //   node tools/tree.test.js --file <文件>     # 换一棵树当夹具（只跑通用段）
 //   FIXTURE=<文件> node tools/tree.test.js    # 同上（环境变量写法）
 const fs = require('fs'), path = require('path'), assert = require('assert');
-const { loadCodec } = require('./codec-from-html');
+const { loadPure, loadCodec } = require('./codec-from-html');
 
 const REPO = path.join(__dirname, '..');
 const DEMO = path.join(REPO, '示例树.txt');       // 仓库自带的示例树
@@ -56,12 +56,8 @@ function slice(a, b, what) {
   assert(i >= 0 && j > i, 'index.html 里找不到：' + what);
   return src.slice(i, j);
 }
-const escSrc    = src.match(/const esc=s=>String\(s\?\?[^\n]*\n/)[0];
-const leavesSrc = src.match(/function leavesOf\(n\)\{[\s\S]*?\n\}/)[0];
-const propsSrc  = slice('function propsOf(n){', '\nfunction crumbHTML', '属性 helpers');
-const searchSrc = slice('// ==== 搜索 BEGIN ====', 'let sRes=[]', '搜索引擎');
-const engine = new Function('DATA', escSrc + '\n' + leavesSrc + '\n' + propsSrc + '\n' + searchSrc +
-  '\nreturn {sTokens,searchUnits,runSearch,runQuery,runRows,rowsToTokens,findPathsByName,inPath,isBranchConst};');
+const engine = new Function('DATA', loadPure() +
+  '\nreturn {sTokens,searchUnits,runSearch,runQuery,runRows,rowsToTokens,condSyntax,findPathsByName,inPath,isBranchConst,esc};');
 
 const { treeToCode, codeToTree } = loadCodec();
 
@@ -193,6 +189,30 @@ ok('rowsToTokens：各维度映射成对应语法，空值不参与', () => {
   assert.deepStrictEqual(S.rowsToTokens([{ kind: 'has', value: '链' }]), [{ field: '含', text: '链' }]);
   assert.deepStrictEqual(S.rowsToTokens([{ kind: 'neg', value: 'xxx' }]), [{ neg: true, text: 'xxx' }]);
   assert.deepStrictEqual(S.rowsToTokens([{ kind: 'branch', value: '   ' }]), []);
+});
+ok('esc：转义后不留裸引号（属性名/值里的 " 不会把 HTML 属性截断）', () => {
+  const s = S.esc('别名" onfocus="alert(1)');
+  assert.strictEqual(s.indexOf('"'), -1, 'esc 之后不该还有裸引号：' + s);
+  assert.ok(s.indexOf('&quot;') >= 0, '引号该被转成 &quot;');
+  assert.strictEqual(S.esc('<b>&</b>'), '&lt;b&gt;&amp;&lt;/b&gt;');
+  assert.strictEqual(S.esc(null), '', 'null 不该变成 "null"');
+});
+ok('condSyntax 与 rowsToTokens 同一张表：条件行写出来的语法能搜回同样的东西', () => {
+  const cases = [
+    { kind: 'scope', value: 'xxx' }, { kind: 'branch', value: 'xxx' }, { kind: 'leaf', value: 'xxx' },
+    { kind: 'text', value: 'xxx' }, { kind: 'depth', value: '2' }, { kind: 'has', value: '链' },
+    { kind: 'neg', value: 'xxx' }, { kind: 'prop', key: '标签', value: 'xxx' },
+  ];
+  for (const c of cases) {
+    const syn = S.condSyntax([c]);
+    assert.ok(syn, c.kind + ' 该能写出等价语法');
+    // 两边形状略有差别（语法解析出来会多带一个 neg:false），比语义即可
+    const norm = t => ({ field: t.field, text: t.text, neg: t.neg === true });
+    assert.deepStrictEqual(S.sTokens(syn).map(norm), S.rowsToTokens([c]).map(norm),
+      c.kind + '：语法与条件行对不上（' + syn + '）');
+  }
+  assert.strictEqual(S.condSyntax([{ kind: 'branch', value: '  ' }]), '', '空值条件不写语法');
+  assert.strictEqual(S.condSyntax([{ kind: 'prop', key: '', value: 'x' }]), '', '属性没填名字不写语法');
 });
 
 // ── 二、示例树专属断言 ─────────────────────────────────────

@@ -20,7 +20,7 @@ function json(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
-http.createServer((req, res) => {
+function handle(req, res) {
   const url = (req.url || "").split("?")[0];
 
   // 数据
@@ -91,5 +91,15 @@ http.createServer((req, res) => {
   // 首页
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   res.end(fs.readFileSync(HTML, "utf8"));
+}
+
+http.createServer((req, res) => {
+  // 兜底：请求处理里任何一处抛异常都不该把整个服务带走。
+  // （以前 GET /media/% 这种畸形请求会让 decodeURIComponent 抛错，进程直接退出）
+  try {
+    handle(req, res);
+  } catch (e) {
+    try { json(res, 500, { ok: false, error: String((e && e.message) || e) }); } catch (e2) { /* 已经发过响应就算了 */ }
+  }
 }).listen(PORT, "0.0.0.0", () =>
   console.log(`导图已启动: http://127.0.0.1:${PORT}/  (Windows侧用 WSL IP 访问; 图片目录 media/)`));

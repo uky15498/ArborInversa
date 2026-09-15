@@ -92,6 +92,7 @@
   #history li .p{display:block;color:var(--mut);font-size:10.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   #history li.followed{opacity:.45;}
   .empty{color:#b6ac99;font-size:12px;padding:10px;}
+  .mvlist{border:1px solid #e3dbcc;border-radius:8px;max-height:280px;overflow:auto;padding:6px;}
   .mvopt{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0e9dc;display:flex;gap:6px;align-items:center;}
   .mvopt:hover{background:#f2ecdf;}
   .mvopt.sel{background:#e3ece4;color:var(--accent);font-weight:600;}
@@ -307,6 +308,15 @@
     </div>
   </div>
 </div>
+<div class="modal" id="moveModal">
+  <div class="box">
+    <h3 id="mvTitle">⇄ 迁移</h3>
+    <div class="where" id="mvVia"></div>
+    <label>选择目标位置（点下方任一枝，即把当前枝移到它下面）</label>
+    <div class="mvlist" id="mvDest"></div>
+    <div class="acts"><button id="mvCxl">取消</button><button id="mvOk" class="primary">确认迁移</button></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -318,7 +328,11 @@ let hist=[];           // 跳转历史,持久化 localStorage
 const LS_KEY="arborinversa_nav";
 
 const $=s=>document.querySelector(s);
-const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+// ==== 纯函数区 BEGIN：数据 ＋ 编解码（不碰 DOM；页面、工具与自测共用同一份）====
+// 转义：& < > 之外还要转义引号 —— 属性名/属性值会被拼进 HTML 属性里（value="…"），
+// 少转一个引号就会把属性截断、把后面的内容变成新属性（实测：名称里一个 " 就散架）
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const nodeAt=p=>{let n=DATA;for(const i of p){n=(n.children||[])[i];if(!n)return null;}return n;};
 const isFolder=n=>!!(n.children&&n.children.length);
 
@@ -339,11 +353,38 @@ const hasProps=n=>!!propsOf(n);
 const propValText=v=>Array.isArray(v)?v.join(" "):String(v==null?"":v);
 function propPairs(n){ const p=propsOf(n); return p?Object.keys(p).map(k=>({k:k,v:p[k]})):[]; }
 function propsText(n){ const p=propsOf(n); return p?Object.keys(p).map(k=>k+" "+propValText(p[k])).join(" "):""; };
+// 属性值文本 → 单值或数组：值里用逗号分隔即为多个（解析只有这一份，属性栏／编辑弹窗／文本代码共用）
+function parsePropValue(raw){
+  const parts=String(raw==null?"":raw).split(/[,，]/).map(x=>x.trim()).filter(x=>x);
+  return parts.length? (parts.length>1? parts : parts[0]) : null;
+}
+// 反过来：属性值 → 输入框里的文本（多值用逗号连接，与 parsePropValue 对应）
+const propEditText=v=>Array.isArray(v)? v.join("，"): (v==null?"":String(v));
+
+// ---- 树遍历：先根后子。数据侧的遍历只留这一份递归，其余都从它派生 ----
+function eachNode(cb,node,path,depth){
+  node=node||DATA; path=path||[]; depth=depth||0;
+  cb(node,path,depth);
+  (node.children||[]).forEach((c,i)=>eachNode(cb,c,path.concat(i),depth+1));
+}
+function eachBranch(f){ eachNode((n,p,d)=>f(n,d,p)); }
+function allPropKeys(){ const set=new Set(); eachNode(n=>{ const p=propsOf(n); if(p) Object.keys(p).forEach(k=>set.add(k)); }); return [...set]; }
+// 候选表（枝名／叶名／属性名／属性值）：一次遍历凑齐，别为一张表走一遍树
+function datalists(){
+  const branches=[], leaves=new Set(), props=new Set(), vals=new Set();
+  eachNode(n=>{
+    branches.push(n.name);
+    leavesOf(n).forEach(l=>leaves.add(l.name||"叶"));
+    const p=propsOf(n); if(!p) return;
+    Object.keys(p).forEach(k=>{ props.add(k); (Array.isArray(p[k])?p[k]:[p[k]]).forEach(x=>vals.add(String(x))); });
+  });
+  return {branches:branches, leaves:[...leaves], props:[...props], vals:[...vals]};
+}
 
 // 名称->路径索引(用于 [[link]])
 function searchIdx(){
   const idx=new Map();
-  (function walk(n,p){ idx.set(n.name,p.slice()); (n.children||[]).forEach((c,i)=>walk(c,p.concat(i))); })(DATA,[]);
+  eachNode((n,p)=>idx.set(n.name,p.slice()));
   return idx;
 }
 function crumbHTML(p){
@@ -400,11 +441,8 @@ function codeStatementOf(t){
 function codePropOf(text){
   const m=/^([^:：]+)[:：]\s*(.*)$/.exec(text||"");
   if(!m) return null;
-  const k=m[1].trim(), raw=m[2].trim();
-  if(!k||!raw) return null;
-  const parts=raw.split(/[,，]/).map(x=>x.trim()).filter(x=>x);
-  if(!parts.length) return null;
-  return {k:k, v:(parts.length>1? parts : parts[0])};
+  const k=m[1].trim(), v=parsePropValue(m[2]);
+  return (k&&v!=null)? {k:k, v:v} : null;
 }
 // 枝的属性 → 代码行（一属性一行）
 function propsToCodeLines(node,pad){
@@ -497,16 +535,17 @@ function codeToTree(text){
   return out;
 }
 // ==== 树 ⇄ 文本代码 END ====
+// ==== 纯函数区 END ====
 
 // ---- 渲染 ----
+const eq=(a,b)=>a.length===b.length&&a.every((v,k)=>b[k]===v);      // 同一个枝
+const isPrefix=(a,b)=>a.length<b.length&&a.every((v,k)=>b[k]===v);  // a 是 b 的祖先
 function render(){ renderTree(); renderDetail(); renderHistory(); fillDatalists(); }
 
 function renderTree(){
   const ul=$("#tree"); ul.innerHTML=""; buildUL(DATA,[],ul);
 }
 function buildUL(node,path,ul){
-  const eq=(a,b)=>a.length===b.length&&a.every((v,k)=>b[k]===v);
-  const isPrefix=(a,b)=>a.length<b.length&&a.every((v,k)=>b[k]===v);
   (node.children||[]).forEach((ch,i)=>{
     const childPath=path.concat(i);
     const li=document.createElement("li");
@@ -719,19 +758,24 @@ function propPanelHTML(node){
     pairs.join("")+
     '<div class="prow padd-row"><button class="padd" id="propAdd">＋ 加一条属性</button></div></div>';
 }
+// 读回一组「键值行」：属性栏与编辑弹窗的行长得一样，读法也就这一份
+function readPropRows(rows){
+  return [...rows].map(r=>({k:r.querySelector(".pkey").value.trim(),
+                            raw:r.querySelector(".pval").value.trim(),
+                            pk:r.getAttribute("data-pk")||""}));
+}
 // 读回属性栏 → 写回 data.json（结构性改动才重绘，免得打字时丢焦点）
 function collectInlineProps(){
-  let structural=false;
+  let structural=false, dropped=0;
   const out={};
-  document.querySelectorAll("#detail .prow").forEach(r=>{
-    const kEl=r.querySelector(".pkey"); if(!kEl) return;
-    const k=kEl.value.trim(), raw=r.querySelector(".pval").value.trim();
-    if(!k||!raw){ if(k||raw) structural=true; return; }
-    const parts=raw.split(/[,，]/).map(x=>x.trim()).filter(x=>x);
-    out[k]= parts.length>1? parts : parts[0];
-    if(k!==(r.getAttribute("data-pk")||"")) structural=true;
+  readPropRows(document.querySelectorAll("#detail .prow")).forEach(r=>{
+    const v=parsePropValue(r.raw);
+    if(!r.k){ if(v!=null) dropped++; return; }       // 填了值没填名字 → 不悄悄丢掉，回头提示
+    if(v==null){ structural=true; return; }          // 有名字没值 → 交给 saveInlineProps 还原原值
+    out[r.k]=v;
+    if(r.k!==r.pk) structural=true;
   });
-  return {props:out, structural:structural};
+  return {props:out, structural:structural, dropped:dropped};
 }
 async function saveInlineProps(){
   const n=nodeAt(curPath)||DATA;
@@ -750,7 +794,8 @@ async function saveInlineProps(){
   if(Object.keys(r.props).length) n.props=r.props; else delete n.props;
   const ok=await save();
   fillDatalists();
-  if(reverted) toast("属性值不能为空 —— 已还原（要删除请点「删」）");
+  if(r.dropped) toast("有 "+r.dropped+" 行没填属性名，已跳过（补上名字再点别处即可保存）");
+  else if(reverted) toast("属性值不能为空 —— 已还原（要删除请点「删」）");
   else toast(ok? "属性已保存" : "属性保存失败");
   if(r.structural||propDraft){ propDraft=false; renderDetail(); }
 }
@@ -800,7 +845,20 @@ function bindPropHover(node){
   h1.onmouseleave=()=>hidePropPop();
 }
 
+// ==== 纯函数区 BEGIN：搜索（同上，不碰 DOM）====
 // ==== 搜索 BEGIN ====
+// 限定维度：唯一一份表 —— 条件行的下拉、等价语法、查询词条 三处都从它派生，不会各改各的
+const COND_KINDS=[
+  {k:"prop",  label:"属性",   ph:"属性值",         list:"dlPropVals"},
+  {k:"scope", label:"在枝下", ph:"枝名（含其下）",  list:"dlBranches", field:"下", pre:"下:"},
+  {k:"branch",label:"枝名",   ph:"枝名含",         list:"dlBranches", field:"枝", pre:"枝:"},
+  {k:"leaf",  label:"叶名",   ph:"叶名含",         list:"dlLeaves",   field:"叶", pre:"叶:"},
+  {k:"text",  label:"正文",   ph:"正文含",                            field:"文", pre:"文:"},
+  {k:"depth", label:"深度",   ph:"层级（根=0）",                      field:"深", pre:"深:"},
+  {k:"has",   label:"含有",   ph:"含有",                              field:"含", pre:"含:"},
+  {k:"neg",   label:"排除词", ph:"排除这个词",             neg:true,             pre:"-"}
+];
+const COND_OF={}; COND_KINDS.forEach(d=>COND_OF[d.k]=d);
 const plainSearchText=s=>String(s||"").replace(/!\[[^\]]+\]\]/g," ").replace(/\[\[([^\]]+)\]\]/g,"$1");
 function countIn(hay,needle){
   const s=String(hay==null?"":hay).toLowerCase(), t=String(needle==null?"":needle).toLowerCase();
@@ -811,15 +869,14 @@ function countIn(hay,needle){
 // 结果单位：枝级（枝名/属性）与 叶级（每个叶一条）
 function searchUnits(){
   const units=[];
-  (function walk(n,path,depth){
+  eachNode((n,path,depth)=>{
     const base={node:n,path:path.slice(),depth:depth,name:n.name,props:propsText(n),pmap:propsOf(n)||{}};
     units.push(base);
     leavesOf(n).forEach((lf,i)=>{
       units.push(Object.assign({},base,{leaf:lf,leafIdx:i,leafName:lf.name||("叶"+(i+1)),
         desc:plainSearchText(lf.desc),raw:String(lf.desc==null?"":lf.desc)}));
     });
-    (n.children||[]).forEach((c,i)=>walk(c,path.concat(i),depth+1));
-  })(DATA,[],0);
+  });
   return units;
 }
 // 查询 → 词条：普通词 / "短语" / 字段:值 / -排除
@@ -899,10 +956,7 @@ const isBranchConst=t=>!!(t.field && !RESERVED_FIELDS[t.field] && t.field!=="下
 function findPathsByName(name){
   const want=String(name||"").toLowerCase(), out=[];
   if(!want) return out;
-  (function walk(n,p){
-    if(String(n.name||"").toLowerCase().includes(want)) out.push(p.slice());
-    (n.children||[]).forEach((c,i)=>walk(c,p.concat(i)));
-  })(DATA,[]);
+  eachNode((n,p)=>{ if(String(n.name||"").toLowerCase().includes(want)) out.push(p.slice()); });
   return out;
 }
 const inPath=(p,pre)=>pre.every((v,i)=>p[i]===v);
@@ -956,23 +1010,28 @@ function runSearch(q,opts){
   toks.forEach(t=>{ if(!t.neg) t.hard=true; });
   return toks.length? runQuery(toks,opts) : [];
 }
-// 条件行 → 查询（条件之间按 并且/或者，关键词仍然必须命中）
+// 条件行 → 查询词条（条件之间按 并且/或者，关键词仍然必须命中）
 function rowsToTokens(rows){
   const out=[];
   (rows||[]).forEach(r=>{
     const v=String(r.value==null?"":r.value).trim();
     if(!v) return;
+    const d=COND_OF[r.kind]; if(!d) return;
     const t=v.toLowerCase();
-    if(r.kind==="prop"){ if(r.key) out.push({field:r.key,text:t}); return; }
-    if(r.kind==="scope"){ out.push({field:"下",text:t}); return; }
-    if(r.kind==="branch"){ out.push({field:"枝",text:t}); return; }
-    if(r.kind==="leaf"){ out.push({field:"叶",text:t}); return; }
-    if(r.kind==="text"){ out.push({field:"文",text:t}); return; }
-    if(r.kind==="depth"){ out.push({field:"深",text:t}); return; }
-    if(r.kind==="has"){ out.push({field:"含",text:t}); return; }
-    if(r.kind==="neg"){ out.push({neg:true,text:t}); return; }
+    if(d.k==="prop"){ if(r.key) out.push({field:r.key,text:t}); return; }
+    if(d.neg){ out.push({neg:true,text:t}); return; }
+    out.push({field:d.field,text:t});
   });
   return out;
+}
+// 条件行 → 等价语法（用同一张表，所以它和上面的查询永远对得上；点一下可转进关键词框）
+function condSyntax(conds){
+  return (conds||[]).map(c=>{
+    const v=String(c.value==null?"":c.value).trim(); if(!v) return "";
+    const d=COND_OF[c.kind]; if(!d) return "";
+    if(d.k==="prop") return c.key? (c.key+":"+v) : "";
+    return (d.pre||"")+v;
+  }).filter(Boolean).join(" ");
 }
 function runRows(rows,opts){
   opts=opts||{};
@@ -1004,6 +1063,7 @@ function snippetAround(text,terms){
   const a=Math.max(0,pos-22), b=Math.min(s.length,pos+44);
   return (a>0?"…":"")+s.slice(a,b)+(b<s.length?"…":"");
 }
+// ==== 纯函数区 END ====
 let sRes=[], sSel=-1, sTimer=null;
 function searchJump(i){ const h=sRes[i]; if(!h) return; goto(h.u.path, h.u.leafIdx||0); }
 function renderSearch(){
@@ -1022,56 +1082,28 @@ function renderSearch(){
   ul.querySelectorAll(".sitem").forEach(li=>{ li.onclick=()=>searchJump(parseInt(li.getAttribute("data-si"),10)); });
 }
 // ---- 限定栏：条件行（并行规则）----
-const COND_KINDS=[["prop","属性"],["scope","在枝下"],["branch","枝名"],["leaf","叶名"],
-                  ["text","正文"],["depth","深度"],["has","含有"],["neg","排除词"]];
 let sConds=[], sCombine="and";
-function eachBranch(f){ (function w(n,d){ f(n,d); (n.children||[]).forEach(c=>w(c,d+1)); })(DATA,0); }
-function allBranches(){ const out=[]; eachBranch((n,d)=>out.push({name:n.name,depth:d})); return out; }
-function allLeafNames(){ const set=new Set(); eachBranch(n=>leavesOf(n).forEach(l=>set.add(l.name||"叶"))); return [...set]; }
-function allPropKeys(){ const set=new Set(); eachBranch(n=>{ const p=propsOf(n); if(p) Object.keys(p).forEach(k=>set.add(k)); }); return [...set]; }
-function allPropVals(){
-  const set=new Set();
-  eachBranch(n=>{ const p=propsOf(n); if(p) Object.keys(p).forEach(k=>{
-    const v=p[k]; (Array.isArray(v)?v:[v]).forEach(x=>set.add(String(x))); }); });
-  return [...set];
-}
 function fillDatalists(){
   const put=(sel,vals)=>{ const e=$(sel); if(e) e.innerHTML=vals.map(x=>'<option value="'+esc(x)+'"></option>').join(""); };
-  put("#dlBranches",allBranches().map(b=>b.name));
-  put("#dlLeaves",allLeafNames());
-  put("#dlProps",allPropKeys());
-  put("#dlPropVals",allPropVals());
-}
-// 条件行 → 等价语法（便于看懂／复制；点一下可转进关键词框）
-function condSyntax(){
-  return sConds.map(c=>{
-    const v=String(c.value==null?"":c.value).trim(); if(!v) return "";
-    if(c.kind==="prop") return c.key? (c.key+":"+v) : "";
-    if(c.kind==="scope") return "下:"+v;
-    if(c.kind==="branch") return "枝:"+v;
-    if(c.kind==="leaf") return "叶:"+v;
-    if(c.kind==="text") return "文:"+v;
-    if(c.kind==="depth") return "深:"+v;
-    if(c.kind==="has") return "含:"+v;
-    if(c.kind==="neg") return "-"+v;
-    return "";
-  }).filter(Boolean).join(" ");
+  const d=datalists();
+  put("#dlBranches",d.branches);
+  put("#dlLeaves",d.leaves);
+  put("#dlProps",d.props);
+  put("#dlPropVals",d.vals);
 }
 function renderConds(){
   const host=$("#sConds"); host.innerHTML="";
   sConds.forEach((c,i)=>{
     const row=document.createElement("div"); row.className="cond";
     let h='<select class="ckind" title="限定维度">'+
-      COND_KINDS.map(k=>'<option value="'+k[0]+'"'+(c.kind===k[0]?" selected":"")+">"+k[1]+"</option>").join("")+'</select>';
+      COND_KINDS.map(d=>'<option value="'+d.k+'"'+(c.kind===d.k?" selected":"")+">"+d.label+"</option>").join("")+'</select>';
     if(c.kind==="prop") h+='<input class="ckey" list="dlProps" placeholder="属性名" value="'+esc(c.key||"")+'">';
     if(c.kind==="has"){
       h+='<select class="cval" title="含有">'+[["图","含插图"],["链","含跳转链接"],["下枝","有下级枝"]]
         .map(o=>'<option value="'+o[0]+'"'+(c.value===o[0]?" selected":"")+">"+o[1]+"</option>").join("")+'</select>';
     }else{
-      const ph={scope:"枝名（含其下）",branch:"枝名含",leaf:"叶名含",text:"正文含",
-                neg:"排除这个词",depth:"层级（根=0）",prop:"属性值"}[c.kind]||"值";
-      const list=(c.kind==="prop")?"dlPropVals":((c.kind==="scope"||c.kind==="branch")?"dlBranches":(c.kind==="leaf"?"dlLeaves":""));
-      h+='<input class="cval"'+(list?' list="'+list+'"':"")+' placeholder="'+ph+'" value="'+esc(c.value==null?"":c.value)+'">';
+      const d=COND_OF[c.kind]||{ph:"值",list:""};
+      h+='<input class="cval"'+(d.list?' list="'+d.list+'"':"")+' placeholder="'+d.ph+'" value="'+esc(c.value==null?"":c.value)+'">';
     }
     h+='<button class="cdel" title="删掉这条">删</button>';
     row.innerHTML=h;
@@ -1092,7 +1124,7 @@ function renderConds(){
     tip.textContent="还没有任何属性：在「编辑当前枝」里加一条，这里就能按属性限定了。";
     host.appendChild(tip);
   }
-  const syn=condSyntax(), eq=$("#sEquiv");
+  const syn=condSyntax(sConds), eq=$("#sEquiv");
   eq.textContent=syn? ("等价语法："+syn+"（点一下转进关键词框）") : "";
   eq.style.display=syn?"":"none";
 }
@@ -1115,7 +1147,7 @@ $("#sAddScope").onclick=()=>{ const n=nodeAt(curPath)||DATA; sConds.push({kind:"
 $("#sClrCond").onclick=()=>{ sConds=[]; renderConds(); doSearch(); };
 $("#sCombine").onchange=()=>{ sCombine=$("#sCombine").value; doSearch(); };
 $("#sEquiv").onclick=()=>{
-  const syn=condSyntax(); if(!syn) return;
+  const syn=condSyntax(sConds); if(!syn) return;
   const box=$("#sInput"); box.value=(box.value.trim()+" "+syn).trim();
   sConds=[]; renderConds(); doSearch();
 };
@@ -1135,7 +1167,7 @@ function switchRight(which){
 $("#tabHist").onclick=()=>switchRight("hist");
 $("#tabSearch").onclick=()=>switchRight("search");
 $("#sHelpBtn").onclick=()=>{ const e=$("#sHelp"); e.style.display=(e.style.display==="none"?"":"none"); };
-$("#sInput").addEventListener("input",()=>{ clearTimeout(sTimer); sTimer=setTimeout(doSearch,120); });
+$("#sInput").addEventListener("input",scheduleSearch);          // 与条件行共用同一个防抖
 $("#sInput").addEventListener("keydown",e=>{
   if(e.key==="ArrowDown"||e.key==="ArrowUp"){
     e.preventDefault(); if(!sRes.length) return;
@@ -1215,28 +1247,26 @@ let editProps=[];
 function renderPropEditor(){
   const host=$("#mProps"); host.innerHTML="";
   editProps.forEach((pr,i)=>{
-    const row=document.createElement("div"); row.className="leafrow";
-    const raw=pr.raw!=null? pr.raw : (Array.isArray(pr.v)? pr.v.join("，"): (pr.v==null?"":String(pr.v)));
-    row.innerHTML=`<input class="pkey" placeholder="属性名（如 别名 / 标签 / 年代）" value="${esc(pr.k||"")}">`+
+    const box=document.createElement("div"); box.className="leafrow";
+    // raw 是「用户原样输入的文本」（尚未解析）；来自数据的则按 propValText 的格式回显
+    const raw=pr.raw!=null? pr.raw : propEditText(pr.v);
+    box.innerHTML=`<input class="pkey" placeholder="属性名（如 别名 / 标签 / 年代）" value="${esc(pr.k||"")}">`+
       `<input class="pval" placeholder="属性值（多个用逗号分隔）" value="${esc(raw)}">`+
       `<button class="pdel danger" title="删除这条属性">删除</button>`;
-    row.querySelector(".pdel").onclick=()=>{ collectProps(); editProps.splice(i,1); renderPropEditor(); };
-    host.appendChild(row);
+    box.querySelector(".pdel").onclick=()=>{ collectProps(); editProps.splice(i,1); renderPropEditor(); };
+    host.appendChild(box);
   });
 }
 function collectProps(){
   const rows=[...document.querySelectorAll("#mProps .leafrow")];
-  if(rows.length) editProps=rows.map(b=>({k:b.querySelector(".pkey").value.trim(),
-                                          raw:b.querySelector(".pval").value.trim()}));
+  if(rows.length) editProps=readPropRows(rows);
   return editProps;
 }
 function propsFromEditor(){
   const out={};
   collectProps().forEach(pr=>{
-    if(!pr.k) return;
-    const parts=String(pr.raw||"").split(/[,，]/).map(x=>x.trim()).filter(x=>x);
-    if(!parts.length) return;
-    out[pr.k]= parts.length>1? parts : parts[0];
+    const v=parsePropValue(pr.raw);
+    if(pr.k&&v!=null) out[pr.k]=v;
   });
   return out;
 }
@@ -1289,56 +1319,45 @@ $("#btnDel").onclick=async()=>{
 };
 
 // ---- 迁移当前枝 ----
-function collectDestOptions(node,path,list,prefix){
-  (node.children||[]).forEach((c,i)=>{
-    const cur=path.concat(i);
-    list.push({path:cur.slice(), label:prefix+c.name});
-    if((c.children||[]).length) collectDestOptions(c,cur,list,prefix+"　");
-  });
+let mvSel="";                                  // 选中的目标（路径的 JSON 文本，"[]" 表示根）
+function moveDestList(){                       // 除根以外的所有枝，按深度缩进成一张平表
+  const list=[];
+  eachNode((n,p,d)=>{ if(d) list.push({path:p.slice(), label:"　".repeat(d-1)+n.name}); });
+  return list;
 }
-function renderMoveDest(sel){
+function renderMoveDest(){
   const host=$("#mvDest"); host.innerHTML="";
-  const list=[]; collectDestOptions(DATA,[],list,"");
-  const root=document.createElement("div");
-  root.className="mvopt"; root.textContent="(根) "+DATA.name;
-  root.onclick=()=>{ host.querySelectorAll(".mvopt").forEach(x=>x.classList.remove("sel")); root.classList.add("sel"); sel.value="[]"; };
-  host.appendChild(root);
-  list.forEach(o=>{
-    const btn=document.createElement("div");
-    btn.className="mvopt"; btn.textContent=o.label+" (位于:"+crumbNamePath(o.path)+")";
-    btn.onclick=()=>{ host.querySelectorAll(".mvopt").forEach(x=>x.classList.remove("sel")); btn.classList.add("sel"); sel.value=JSON.stringify(o.path); };
-    host.appendChild(btn);
-  });
+  const add=(label,val)=>{
+    const el=document.createElement("div");
+    el.className="mvopt"+(mvSel===val?" sel":"");
+    el.textContent=label;
+    el.onclick=()=>{ mvSel=val; host.querySelectorAll(".mvopt").forEach(x=>x.classList.remove("sel")); el.classList.add("sel"); };
+    host.appendChild(el);
+  };
+  add("(根) "+DATA.name,"[]");
+  moveDestList().forEach(o=>add(o.label+" (位于:"+crumbNamePath(o.path)+")",JSON.stringify(o.path)));
 }
 $("#btnMove").onclick=()=>{
   if(!curPath.length) return toast("根不需迁移");
   const n=nodeAt(curPath); if(!n) return;
-  const ov=document.createElement("div"); ov.className="modal show"; ov.style.cssText="position:fixed;inset:0;background:rgba(30,25,18,.5);display:flex;align-items:center;justify-content:center;z-index:100;";
-  ov.innerHTML=`<div class="box" style="background:var(--card);border-radius:13px;width:min(660px,93vw);padding:20px 24px;max-height:92vh;overflow:auto;">
-    <h3 style="font-size:16px;">⇄ 迁移「${esc(n.name)}」到目标位置</h3>
-    <div class="where" style="font-size:11.5px;color:var(--mut);margin:2px 0 8px;">当前在: ${crumbNamePath(curPath)}</div>
-    <label style="display:block;font-size:12px;color:var(--mut);margin:8px 0 4px;">选择目标位置（点下方任一枝，即把当前枝移到它下面）:</label>
-    <div id="mvDest" style="border:1px solid #e3dbcc;border-radius:8px;max-height:280px;overflow:auto;padding:6px;"></div>
-    <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:16px;">
-      <button id="mvCxl">取消</button><button id="mvOk" class="primary">确认迁移</button>
-    </div></div>`;
-  document.body.appendChild(ov);
-  const sel={value:""};
-  renderMoveDest(sel);
-  $("#mvCxl").onclick=()=>ov.remove();
-  $("#mvOk").onclick=async()=>{
-    if(!sel.value){ return toast("请先选一个目标位置"); }
-    const destPath=JSON.parse(sel.value);
-    const curStr=curPath.join(), destStr=destPath.join();
-    if(destStr===curStr) return toast("不能移到自身");
-    if(curStr && destStr.startsWith(curStr+",")) return toast("不能移到自己的下级内");
-    const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
-    const node=parent.children.splice(idx,1)[0];
-    const dest=nodeAt(destPath)||DATA; dest.children=dest.children||[]; dest.children.push(node);
-    await save(); ov.remove();
-    goto(destPath.concat(dest.children.length-1));
-    toast("已迁移到新位置");
-  };
+  $("#mvTitle").textContent="⇄ 迁移「"+n.name+"」到目标位置";
+  $("#mvVia").textContent="当前在: "+crumbNamePath(curPath);
+  mvSel=""; renderMoveDest();
+  $("#moveModal").classList.add("show");
+};
+$("#mvCxl").onclick=()=>$("#moveModal").classList.remove("show");
+$("#mvOk").onclick=async()=>{
+  if(!mvSel) return toast("请先选一个目标位置");
+  const destPath=JSON.parse(mvSel);
+  const curStr=curPath.join(), destStr=destPath.join();
+  if(destStr===curStr) return toast("不能移到自身");
+  if(curStr && destStr.startsWith(curStr+",")) return toast("不能移到自己的下级内");
+  const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
+  const node=parent.children.splice(idx,1)[0];
+  const dest=nodeAt(destPath)||DATA; dest.children=dest.children||[]; dest.children.push(node);
+  await save(); $("#moveModal").classList.remove("show");
+  goto(destPath.concat(dest.children.length-1));
+  toast("已迁移到新位置");
 };
 
 // ---- 植树：用文本代码导入一棵树 ----
