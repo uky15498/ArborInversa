@@ -222,9 +222,13 @@
   html.is-mobile .workbench{flex:1 1 auto;height:auto;min-height:0;
     padding-bottom:calc(44px + env(safe-area-inset-bottom));}
   html.is-mobile .splitter{display:none;}                   /* 栏都成浮层了，没有可拖的分隔条 */
-  html.is-mobile #detail{padding:14px 15px 96px;}
-  /* 右下角题词：手机上照样留着，只是收小一号（正文底部留出它的位置，别让末行压在下面） */
-  html.is-mobile .epigraph{right:14px;bottom:10px;font-size:14px;line-height:1.7;letter-spacing:.2px;}
+  html.is-mobile #detail{padding:14px 15px 18px;flex:1 0 auto;}
+  /* 题词（《薄伽梵歌》）：手机版**不上浮**，改成排在正文末尾的落款 ——
+     跟着内容滚，绝不压字；正文短的时候由 #detail 撑开，它就落在正文区底部。
+     位置由 placeEpigraph() 挪进滚动区（renderDetail 只重写 #detail 内部，冲不掉它）。 */
+  html.is-mobile #paneC .scroll{display:flex;flex-direction:column;}
+  html.is-mobile .epigraph{position:static;flex:none;text-align:right;font-size:14px;line-height:1.7;
+    letter-spacing:.2px;padding:22px 15px 16px;}
   html.is-mobile .epigraph .src{font-size:12.5px;margin-top:1px;}
   html.is-mobile .crumb{font-size:11.5px;}
 
@@ -266,11 +270,6 @@
   html.is-mobile .box textarea.code{min-height:36vh;font-size:12.5px;}
   html.is-mobile .box .acts button{min-height:38px;flex:1;}
   html.is-mobile .toast{bottom:calc(56px + env(safe-area-inset-bottom));}
-  /* 手机横屏（竖着没多少地方）：题词暂时让位，正文比它要紧 */
-  @media (max-height:430px){
-    html.is-mobile .epigraph{display:none;}
-    html.is-mobile #detail{padding-bottom:26px;}
-  }
 </style>
 <script>
 // ==== 纯函数区 BEGIN：界面（手机版判定，不碰 DOM）====
@@ -1838,6 +1837,21 @@ function mobileUI(){ return document.documentElement.classList.contains("is-mobi
 
   // 窄窗口的电脑上按 Esc 收抽屉（底部面板的 Esc 留给搜索框自己用）
   document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&mobileUI()) setDrawer(false); });
+
+  // 题词（《薄伽梵歌》）换个位置待着：
+  //   桌面版 —— 留在 #paneC 里当右下角浮层（绝对定位，老样子，一个像素不动）
+  //   手机版 —— 挪进 #paneC 的滚动区、排在 #detail 后面，变成**正文末尾的落款**（不上浮、不压字）
+  // 桌面版要绝对定位，就得是 #paneC 的直接子元素；手机版要在滚动流里，就得是 .scroll 的子元素。
+  // #detail 是 renderDetail() 用 innerHTML 重写的，题词放在它**旁边**才不会被冲掉。
+  function placeEpigraph(){
+    const ep=document.querySelector(".epigraph"), paneC=$("#paneC");
+    if(!ep||!paneC) return;
+    const sc=paneC.querySelector(".scroll"); if(!sc) return;
+    const want=mobileUI()? sc : paneC;
+    if(ep.parentElement!==want) want.appendChild(ep);
+  }
+  placeEpigraph();
+  window.addEventListener("resize",placeEpigraph);   // 窄↔宽切换时归位（顶栏那条 resize 挂在前面，先跑）
 })();
 
 // ---- 初始化 ----
