@@ -218,6 +218,28 @@
      不弹 title，而用户要的就是「鼠标停上去显示要撤销的是哪一步」 */
   #btnUndo.off{opacity:.4;cursor:default;}
   #btnUndo.off:hover{background:#fff;}
+  /* 云：顶栏那颗按钮 ＋ 用户数据面板 ＋ 用户名长停浮出的「用户数据小条」 */
+  .cloudbtn{display:flex;align-items:center;gap:5px;}
+  .cloudbtn .dot{font-size:10px;color:#b1a690;line-height:1;}
+  .cloudbtn.on .dot{color:#3f7a5f;}
+  .cloudbtn .who{max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cloudrow{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.9;}
+  .cloudrow .k{color:var(--mut);flex:none;min-width:5em;}
+  .cloudrow .v{word-break:break-all;}
+  .cloudsep{border-top:1px solid var(--line);margin:12px 0 4px;}
+  .cloudpick{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 4px;}
+  .cloudpick button{border:1px solid #cbc1b2;background:#fff;color:#6b6355;border-radius:7px;
+    padding:4px 9px;font-size:13px;cursor:pointer;}
+  .cloudpick button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  /* ★ 被同名的人占着的区不是「不能用」，而是「登录时该点它」——
+     所以给候选样式（可点），而不是划掉；注册时服务端会自己拦 */
+  .cloudpick button.cand{background:#f6efe4;border-color:#ddd0b8;color:#8a7a5e;}
+  .cloudpick button.cand.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  /* 顶栏那颗云按钮：现在会带上用户名，手机上别把工具条撑坏 */
+  html.is-mobile .cloudbtn .who{max-width:6em;}
+  .cloudstate{font-size:11.5px;color:var(--mut);}
+  .cloudstate.on{color:#3f7a5f;}
+  .cloudstate.warn{color:#b3543f;}
   html.is-mobile{-webkit-text-size-adjust:100%;}
   /* 顶栏两行（用户定的排法）：第一行 ☰ ＋ 品牌名，第二行整行都是编辑按钮、可左右滑。
      整个 body 竖着排，顶栏自然高度、正文吃剩下的 —— 别再把顶栏高度写死 52px */
@@ -459,7 +481,59 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
     <div class="acts"><button id="missClose" class="primary">知道了</button></div>
   </div>
 </div>
+<div class="modal" id="cloudModal">
+  <div class="box">
+    <h3 id="cloudTitle">云</h3>
+    <div class="where" id="cloudWhere"></div>
+
+    <!-- 未登录：登录 / 注册 -->
+    <div id="cloudLogin">
+      <label>服务器地址</label>
+      <input id="cloudAddr" placeholder="http://你的服务器:8488" autocomplete="off" spellcheck="false"/>
+      <div class="hint" id="cloudAddrHint"></div>
+      <label>用户名</label>
+      <input id="cloudName" placeholder="自己起一个，1~32 字" autocomplete="off"/>
+      <label>口令</label>
+      <input id="cloudPass" type="password" placeholder="至少 6 位" autocomplete="new-password"/>
+      <label>分区<span class="where" style="display:inline;margin-left:6px">（广韵十六摄，同名的人各占一区）</span></label>
+      <div class="cloudpick" id="cloudParts"></div>
+      <div class="snote" id="cloudPartNote"></div>
+      <div class="acts">
+        <button id="cloudLoginBtn" class="primary">登录</button>
+        <button id="cloudRegBtn" class="ghost">注册新账号</button>
+        <button id="cloudCxl">关闭</button>
+      </div>
+    </div>
+
+    <!-- 已登录：用户数据（★ 分区只在这里和用户名长停时露面） -->
+    <div id="cloudMe" style="display:none">
+      <div id="cloudMeRows"></div>
+      <div class="snote" id="cloudState"></div>
+      <div class="acts" style="flex-wrap:wrap;justify-content:flex-start">
+        <button id="cloudPush" class="ghost">把这棵树传上去</button>
+        <button id="cloudPull">从云端重取</button>
+        <button id="cloudPassBtn">改口令</button>
+        <button id="cloudOut" class="danger">退出登录</button>
+        <button id="cloudClose" class="primary">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
+
+<div class="modal" id="cloudConflict">
+  <div class="box">
+    <h3>云端在别处改过了</h3>
+    <div class="where" id="ccWhere"></div>
+    <div class="snote">两边都改过同一棵树。要留下哪一份？（另一份不会自动备份，选之前想一下）</div>
+    <div class="acts">
+      <button id="ccMine" class="danger">用我这边的覆盖云端</button>
+      <button id="ccTheirs" class="primary">取云端的，丢我这边的改动</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
 // ---- 存取：内容从哪读、往哪写 ----
@@ -1906,6 +1980,26 @@ $("#plantOk").onclick=async()=>{
 
 // ---- 保存 ----
 async function save(){
+  if(Cloud.on()){                                  // 登录了云端：写云端（带版本号，冲突就问）
+    try{
+      const r=await Cloud.存树(DATA);
+      记云端信息({版本:r.版本, 改于:r.改于});
+      return true;
+    }catch(e){
+      if(e.状态===409){
+        const 取=await 云端冲突(e.回话);
+        if(取==="mine"){
+          try{ const r=await Cloud.存树(DATA,true); 记云端信息({版本:r.版本,改于:r.改于}); toast("已用你这边的覆盖云端"); return true; }
+          catch(e2){ toast("还是没存上："+e2.message); return false; }
+        }
+        try{ const t=await Cloud.取树(); DATA=t.tree; curPath=[]; curLeaf=0; render(); navReset([]); 记云端信息(t); toast("已换成云端那份"); return true; }
+        catch(e2){ toast("取不回来："+e2.message); return false; }
+      }
+      Cloud.未上传=true; Cloud.离网=true; 刷云端界面();
+      toast("云同步没成功："+e.message+"（改动还在，回头点「把这棵树传上去」）");
+      return false;
+    }
+  }
   try{ return await Store.save(DATA); }catch(e){ return false; }
 }
 function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
@@ -1992,8 +2086,319 @@ function mobileUI(){ return document.documentElement.classList.contains("is-mobi
   window.addEventListener("resize",placeEpigraph);   // 窄↔宽切换时归位（顶栏那条 resize 挂在前面，先跑）
 })();
 
+// ==== 云端（账号 ＋ 广韵十六摄分区）==========================================
+// 与本地存取的关系：**没登录＝照旧用本地那份**（exe/WSL 的 data.json、便携版自己的负载）；
+// **登录之后 load/save 都走云端**，本地那份原样不动（退出登录就回到它）。
+// 存树带版本号（内容哈希）：云端在别的设备改过 → 409，问用户「覆盖」还是「取云端的」，
+// 绝不默默盖掉。断网时改动留在内存里，回头点「把这棵树传上去」。
+const CLOUD_KEY="arborinversa_cloud";
+const CLOUD_PARTS=["通","江","止","遇","蟹","臻","山","效","果","假","宕","梗","曾","流","深","咸"];
+const Cloud={
+  地址:"", 用户名:"", 分区:"", 令牌:"", 版本:"", 改于:"", 字节:0, 建号:"",
+  未上传:false, 离网:false,
+
+  on(){ return !!this.令牌; },
+  读回(){
+    try{ Object.assign(this,JSON.parse(localStorage.getItem(CLOUD_KEY)||"{}")); }catch(e){}
+    if(!this.地址 && /^https?:$/.test(location.protocol)) this.地址=location.origin;   // 网页就是这台服务器发的
+    return this;
+  },
+  记住(){
+    try{ localStorage.setItem(CLOUD_KEY,JSON.stringify({
+      地址:this.地址,用户名:this.用户名,分区:this.分区,令牌:this.令牌,
+      版本:this.版本,改于:this.改于,字节:this.字节,建号:this.建号 })); }catch(e){}
+  },
+  退出(){
+    this.令牌=""; this.用户名=""; this.分区=""; this.版本=""; this.改于=""; this.字节=0; this.建号="";
+    this.未上传=false; this.离网=false; this.记住(); 刷云端界面();
+  },
+  async 请求(路径,方法,数据){
+    const base=String(this.地址||"").replace(/\/+$/,"");
+    if(!base) throw new Error("还没填服务器地址");
+    const opt={method:方法||"GET",headers:{}};
+    if(this.令牌) opt.headers.Authorization="Bearer "+this.令牌;
+    if(数据!==undefined){ opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(数据); }
+    let r;
+    try{ r=await fetch(base+路径,opt); }
+    catch(e){ throw new Error("连不上 "+base+"（"+((e&&e.message)||e)+"）"); }
+    let d=null; try{ d=await r.json(); }catch(e){}
+    if(!d) throw new Error("服务器回了 "+r.status+"，但不是 JSON —— 地址填对了吗？");
+    if(!r.ok) throw Object.assign(new Error(d.error||("HTTP "+r.status)),{状态:r.status,回话:d});
+    return d;
+  },
+  查分区(名){ return this.请求("/api/parts?name="+encodeURIComponent(名)); },
+  async 注册(名,口令,分区){ const d=await this.请求("/api/register","POST",{name:名,pass:口令,part:分区||undefined}); this.收下(d); return d; },
+  async 登录(名,口令,分区){ const d=await this.请求("/api/login","POST",{name:名,pass:口令,part:分区||undefined}); this.收下(d); return d; },
+  改口令(旧,新){ return this.请求("/api/pass","POST",{pass:旧,新pass:新}); },
+  我的(){ return this.请求("/api/me"); },
+  async 取树(){ const d=await this.请求("/api/tree"); this.版本=d.版本; this.改于=d.改于; this.记住(); return d; },
+  async 存树(树,强制){
+    const d=await this.请求("/api/tree","PUT",{tree:树, 版本:强制? undefined : this.版本});
+    this.版本=d.版本; this.改于=d.改于; this.未上传=false; this.离网=false; this.记住();
+    return d;
+  },
+  收下(d){ this.令牌=d.token; this.用户名=d.name; this.分区=d.part; this.版本=""; this.未上传=false; this.离网=false; this.记住(); },
+};
+
+// ---- 云面板：顶栏那颗按钮 ＋ 弹窗 ----
+function 云地址(){
+  const a=String(Cloud.地址||"").replace(/\/+$/,"");
+  if(/^https?:$/.test(location.protocol) && a===location.origin) return "（这台服务器）";
+  return a||"（没填）";
+}
+function 刷云端界面(){
+  const b=document.getElementById("cloudBtn");
+  if(b){
+    b.classList.toggle("on",Cloud.on());
+    b.innerHTML=Cloud.on()
+      ? '<span class="dot">●</span><span class="who">'+esc(Cloud.用户名)+'</span>'
+      : '<span class="dot">○</span><span class="who">云</span>';
+    b.title=Cloud.on()? "云端账号 —— 点开看用户数据（鼠标停在用户名上也会浮出来）"
+                      : "登录云端：把树存到自己的服务器里，换设备也能接着写";
+  }
+  const st=document.getElementById("cloudState");
+  if(st){
+    st.className="snote"+(Cloud.on()&&!Cloud.未上传?" on":"");
+    st.textContent=!Cloud.on()? "· 没登录，现在用的是本地那份内容"
+      : (Cloud.未上传? "· 有改动还没传上云端 —— 点「把这棵树传上去」" : "· 已同步");
+  }
+  const rows=document.getElementById("cloudMeRows");
+  if(rows && Cloud.on()){
+    const kb=Cloud.字节/1024;
+    rows.innerHTML=[
+      ["用户名",esc(Cloud.用户名)],
+      ["分区",esc(Cloud.分区)+"摄　<span class='where'>（广韵十六摄之一，同名的人靠它分开）</span>"],
+      ["服务器",esc(云地址())],
+      ["建号",esc(String(Cloud.建号||"—").slice(0,19).replace("T"," "))],
+      ["最后改于",esc(String(Cloud.改于||"—").slice(0,19).replace("T"," "))],
+      ["云端那棵树",(Cloud.字节? (kb<1? Cloud.字节+" 字节" : kb.toFixed(1)+" KB") : "—")+"　版本 "+esc(String(Cloud.版本||"—").slice(0,8))],
+    ].map(x=>'<div class="cloudrow"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
+  }
+}
+// ★ 分区有两种「被占」的含义，别混：
+//   同名的人已经占了这个区 —— **登录时你要点的正是它**（候选），注册时服务端会自己拦
+//   所以一律画成「可点的候选样式」，另外用 分区手选 记住用户是不是自己点过的：
+//   **登录不带分区**（让服务端按名字+口令认人；同名跨多区它会让你选），注册才带。
+let 分区手选="";
+function 画分区(占用){
+  const host=document.getElementById("cloudParts"); if(!host) return;
+  const 占=new Set(占用||[]);
+  分区手选="";
+  host.innerHTML=CLOUD_PARTS.map(p=>'<button type="button" data-p="'+p+'" class="'+(占.has(p)?"cand":"")+'">'+p+'</button>').join("");
+  host.querySelectorAll("button").forEach(b=>{
+    b.onclick=()=>{
+      host.querySelectorAll("button").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on"); 分区手选=b.dataset.p; 写分区提示();
+    };
+  });
+  const 空=[...host.querySelectorAll("button")].find(b=>!b.classList.contains("cand"));
+  if(空) 空.classList.add("on");                      // 默认挑第一个空着的（浅色的那些是别人的）
+  写分区提示();
+}
+function 选中的分区(){
+  const on=document.querySelector("#cloudParts button.on");
+  return on? on.dataset.p : "";
+}
+function 写分区提示(){
+  const n=document.getElementById("cloudPartNote"); if(!n) return;
+  const 占=document.querySelectorAll("#cloudParts button.cand").length;
+  n.textContent = 占
+    ? "有 "+占+" 个区已经有同名的人了（浅色的那些）—— **登录**就点你自己的那个区；**新注册**会用到空着的区。"
+    : "这个名字 16 个区都空着，默认给你挑了第一个；想换哪个点哪个。";
+}
+function 开云面板(){
+  document.getElementById("cloudLogin").style.display=Cloud.on()? "none" : "";
+  document.getElementById("cloudMe").style.display=Cloud.on()? "" : "none";
+  document.getElementById("cloudTitle").textContent=Cloud.on()? "用户数据" : "云";
+  document.getElementById("cloudWhere").textContent=Cloud.on()
+    ? "不登录时用的还是本地那份内容；登录后 load/save 都走云端。"
+    : "用户名 ＋ 口令 ＋ 分区。分区是广韵十六摄，用来让同名的人各占一格。";
+  const a=document.getElementById("cloudAddr"); if(a) a.value=Cloud.地址||"";
+  const h=document.getElementById("cloudAddrHint");
+  if(h) h.textContent=(Cloud.地址 && Cloud.地址===location.origin && /^https?:$/.test(location.protocol))
+    ? "（网页就是这台服务器发的，留空也行）" : "形如 http://1.2.3.4:8488，末尾不要斜杠";
+  if(Cloud.on()) 刷云端界面(); else 画分区([]);
+  document.getElementById("cloudModal").classList.add("show");
+}
+// 登录认人：服务端只认「名字＋口令」。同名跨多个区时，拿同一个口令逐个候选区试 ——
+// 口令对上哪个区就是哪个。这样用户完全不用知道「分区」这回事（分区只在用户数据里露面）。
+async function 云登录认人(名,令){
+  try{ return await Cloud.登录(名,令,""); }
+  catch(e){
+    const 候选=(e.回话&&e.回话.候选)||null;
+    if(e.状态!==409 || !候选 || !候选.length) throw e;
+    for(const p of 候选){
+      try{ return await Cloud.登录(名,令,p); }
+      catch(e2){ if(e2.状态!==401) throw e2; }
+    }
+    throw Object.assign(new Error("口令不对"),{状态:401,回话:{候选:候选}});
+  }
+}
+async function 云上按(动作){
+  const 名=document.getElementById("cloudName").value.trim();
+  const 令=document.getElementById("cloudPass").value;
+  const 址=document.getElementById("cloudAddr").value.trim();
+  if(址) Cloud.地址=址.replace(/\/+$/,"");
+  if(!Cloud.地址) return toast("先填服务器地址");
+  if(!名) return toast("先填用户名");
+  if(令.length<6) return toast("口令至少 6 位");
+  try{
+    // ★ 登录**不带分区**（除非用户自己点过）：让服务端按「名字＋口令」认人，
+    //   同名跨多个区时它会回候选让用户选；注册才带分区。
+    const 区 = 动作==="reg" ? (分区手选||选中的分区()) : 分区手选;
+    if(动作==="reg" && !confirm("注册新账号：「"+名+"」进「"+区+"」区。\n口令忘了找不回来（服务器只存哈希），记牢。确定吗？")) return;
+    const d = 动作==="reg" ? await Cloud.注册(名,令,区)
+                           : (区 ? await Cloud.登录(名,令,区) : await 云登录认人(名,令));
+    await 登录之后(d);
+  }catch(e){
+    const 回话=e.回话||{};
+    const 占=回话.候选||回话.占用;                     // 登录给「候选」，注册撞名给「占用」
+    if(占 && 占.length){
+      画分区(占);
+      const 空=[...document.querySelectorAll("#cloudParts button")].find(b=>!b.classList.contains("cand"));
+      const 首个候选=document.querySelector("#cloudParts button.cand");
+      const 选它 = 动作==="reg" ? 空 : 首个候选;         // 注册跳空区，登录选中第一个候选
+      if(选它){
+        document.querySelectorAll("#cloudParts button").forEach(x=>x.classList.remove("on"));
+        选它.classList.add("on"); 分区手选=选它.dataset.p; 写分区提示();
+        toast(动作==="reg"
+          ? "「"+占.join("、")+"」已经有同名的人了 —— 已给你换到「"+选它.dataset.p+"」区，再点一次注册"
+          : "口令不对。这个名字在「"+占.join("、")+"」都有账号 —— 已替你选中「"+选它.dataset.p+"」，不对就点浅色的另一个");
+      }else{
+        toast("这个名字的 16 个区都占满了 —— 换一个用户名吧");
+      }
+      return;
+    }
+    toast("没成："+e.message);
+  }
+}
+async function 登录之后(d){
+  document.getElementById("cloudPass").value="";
+  记云端信息(d);
+  const t=await Cloud.取树();
+  const 云端空=!t.tree.leaves.length && !t.tree.children.length;
+  const 手上有=!!(DATA && (leavesOf(DATA).length || (DATA.children||[]).length));
+  if(云端空 && 手上有 && confirm("云端这个账号还是空的。\n把现在打开的这棵树（「"+DATA.name+"」）传上去吗？")){
+    await Cloud.存树(DATA,true);
+    toast("已把「"+DATA.name+"」传上云端");
+  }else if(!云端空){
+    DATA=t.tree; curPath=[]; curLeaf=0; render();
+    navReset([]);
+    toast("已从云端取回「"+DATA.name+"」");
+  }
+  const me=await Cloud.我的().catch(()=>null);
+  if(me) 记云端信息(me);
+  document.getElementById("cloudModal").classList.remove("show");
+  刷云端界面();
+}
+function 记云端信息(d){
+  if(!d) return;
+  if(d.part) Cloud.分区=d.part;
+  if(d.name) Cloud.用户名=d.name;
+  if(d.版本!==undefined) Cloud.版本=d.版本;
+  if(d.改于) Cloud.改于=d.改于;
+  if(d.字节!==undefined) Cloud.字节=d.字节;
+  if(d.建号) Cloud.建号=d.建号;
+  Cloud.记住(); 刷云端界面();
+}
+// 冲突：云端在别的设备改过 —— 让用户自己决定留哪一份
+function 云端冲突(回话){
+  return new Promise(解决=>{
+    const m=document.getElementById("cloudConflict");
+    document.getElementById("ccWhere").textContent="云端最后改于 "+
+      String((回话&&回话.远端改于)||"").slice(0,19).replace("T"," ")+
+      "（版本 "+String((回话&&回话.远端版本)||"").slice(0,8)+"）";
+    m.classList.add("show");
+    const 收=取=>{
+      m.classList.remove("show");
+      document.getElementById("ccMine").onclick=null;
+      document.getElementById("ccTheirs").onclick=null;
+      解决(取);
+    };
+    document.getElementById("ccMine").onclick=()=>收("mine");
+    document.getElementById("ccTheirs").onclick=()=>收("theirs");
+  });
+}
+function 浮用户条(){
+  if(!Cloud.on() || document.getElementById("cloudPop")) return;
+  const 锚=document.getElementById("cloudBtn"); if(!锚) return;
+  const box=document.createElement("div");
+  box.className="prop-pop"; box.id="cloudPop";
+  box.innerHTML='<div class="pt">云端账号</div>'+
+    '<div class="pr"><span class="pk">用户名</span><span class="pv">'+esc(Cloud.用户名)+'</span></div>'+
+    '<div class="pr"><span class="pk">分区</span><span class="pv">'+esc(Cloud.分区)+'摄</span></div>'+
+    '<div class="pr"><span class="pk">最后改于</span><span class="pv">'+esc(String(Cloud.改于||"—").slice(0,16).replace("T"," "))+'</span></div>'+
+    '<div class="pr"><span class="pk">状态</span><span class="pv">'+(Cloud.未上传? "有改动没传上去":"已同步")+'</span></div>';
+  document.body.appendChild(box);
+  const r=锚.getBoundingClientRect(), bb=box.getBoundingClientRect();
+  let left=Math.min(r.left, window.innerWidth-8-bb.width), top=r.bottom+7;
+  if(top+bb.height>window.innerHeight-8) top=Math.max(8,r.top-7-bb.height);
+  box.style.left=Math.max(8,left)+"px"; box.style.top=top+"px";
+}
+function 收用户条(){ const e=document.getElementById("cloudPop"); if(e) e.remove(); }
+(function 装云端(){
+  Cloud.读回();
+  const bar=document.querySelector(".toolbar");
+  if(bar && !document.getElementById("cloudBtn")){
+    const b=document.createElement("button");
+    b.type="button"; b.id="cloudBtn"; b.className="cloudbtn";
+    b.onclick=开云面板;
+    bar.appendChild(b);                                   // 放最右：账号类入口，不跟编辑按钮挤
+    let 定时=null;
+    b.addEventListener("mouseenter",()=>{ if(!Cloud.on()) return; 定时=setTimeout(浮用户条,1000); });  // 长停 1 秒
+    b.addEventListener("mouseleave",()=>{ if(定时){ clearTimeout(定时); 定时=null; } 收用户条(); });
+    b.addEventListener("click",收用户条);
+  }
+  const 关=()=>document.getElementById("cloudModal").classList.remove("show");
+  document.getElementById("cloudCxl").onclick=关;
+  document.getElementById("cloudClose").onclick=关;
+  document.getElementById("cloudLoginBtn").onclick=()=>云上按("login");
+  document.getElementById("cloudRegBtn").onclick=()=>云上按("reg");
+  const 名框=document.getElementById("cloudName");
+  名框.addEventListener("input",()=>{                      // 边打名字边问服务器：哪几个区被占了
+    clearTimeout(名框._t);
+    名框._t=setTimeout(async ()=>{
+      const 名=名框.value.trim();
+      if(!名 || !Cloud.地址){ 画分区([]); return; }
+      try{ const d=await Cloud.查分区(名); 画分区(d.占用); }catch(e){ 画分区([]); }
+    },400);
+  });
+  document.getElementById("cloudPush").onclick=async()=>{
+    try{ await Cloud.存树(DATA,true); toast("已把这棵树传到云端"); 刷云端界面(); }
+    catch(e){ toast("没传上去："+e.message); }
+  };
+  document.getElementById("cloudPull").onclick=async()=>{
+    if(!confirm("用云端的覆盖现在打开的这棵树？本机还没传上去的改动会丢。")) return;
+    try{
+      const t=await Cloud.取树();
+      DATA=t.tree; curPath=[]; curLeaf=0; render(); navReset([]);
+      const me=await Cloud.我的().catch(()=>null); if(me) 记云端信息(me);
+      toast("已从云端取回「"+DATA.name+"」");
+    }catch(e){ toast("取不回来："+e.message); }
+  };
+  document.getElementById("cloudPassBtn").onclick=async()=>{
+    const 旧=prompt("现在的口令："); if(旧==null) return;
+    const 新=prompt("新口令（至少 6 位）："); if(!新) return;
+    try{ await Cloud.改口令(旧,新); toast("口令改了 —— 别的设备要重新登录"); }
+    catch(e){ toast("没改成："+e.message); }
+  };
+  document.getElementById("cloudOut").onclick=()=>{
+    if(!confirm("退出云端账号？\n退出后回到本地那份内容（云端那份不动）。")) return;
+    Cloud.退出();
+    document.getElementById("cloudModal").classList.remove("show");
+    toast("已退出云端 —— 回到本地那份");
+    Store.load().then(d=>{ DATA=d; curPath=[]; curLeaf=0; render(); navReset([]); }).catch(()=>{});
+  };
+  刷云端界面();
+})();
+
 // ---- 初始化 ----
-Store.load().then(d=>{
+const 起手 = Cloud.on()
+  ? Cloud.取树().then(t=>{ 记云端信息(t); return t.tree; })
+      .catch(e=>{ Cloud.离网=true; Cloud.未上传=true; 刷云端界面();
+                  toast("连不上云端（"+e.message+"）—— 先用本地那份，改动回头传上去"); return Store.load(); })
+  : Store.load();
+起手.then(d=>{
   DATA=d;
   hist=JSON.parse(localStorage.getItem(LS_KEY)||"[]");
   if(!hist.length) hist=[{path:[],name:DATA.name,time:Date.now()}];
@@ -2001,6 +2406,7 @@ Store.load().then(d=>{
   const cs=document.querySelector("#paneC .scroll"); if(cs) cs.addEventListener("scroll",hidePropPop,{passive:true});
   render();
   scanMissingImgs();          // 后台把「缺哪几张图」一次列全
+  刷云端界面();
 }).catch(()=>{ $("#detail").innerHTML="<div style='padding:20px;color:#a33;'>无法加载 data.json。<br>请确认 data.json 与程序在同一个文件夹里，然后重开程序。</div>"; });
 </script>
 </body>

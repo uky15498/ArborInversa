@@ -40,3 +40,6 @@ media/*
 # 说明：仓库的 data.json ＝ 由 示例树.txt 生成的示例树（框架自带、非个人内容），
 #       用 tools/check_data.js 核对一致性。你的内容正本在应用目录 C:\ArborInversa\，
 #       给别人看内容用随包的《美术史树-试用.txt》。
+
+# 云端成品包（构建产物，别进仓库）
+dist-cloud/
