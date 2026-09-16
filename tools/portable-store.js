@@ -160,6 +160,8 @@
     },
     reset() {                              // 丢掉未导出的改动，回到文件里的内容
       if (!confirm("丢掉还没导出的改动，回到这份 HTML 里的内容？")) return;
+      // 这一步本身也记进撤销账本（「丢错了」能救回来）—— 撤销的事归界面管，这里只喊一声
+      if (window.__arborUndo) window.__arborUndo.push("丢掉未导出的改动");
       clearDraft();
       baseText = payloadText();
       DATA = rootOf(codeToTree(baseText));

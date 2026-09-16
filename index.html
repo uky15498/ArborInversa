@@ -214,6 +214,10 @@
     padding:2px 9px;font-size:12px;line-height:1.5;cursor:pointer;}
   .navpair button:hover:not(:disabled){background:#f2ecdf;color:var(--accent);}
   .navpair button:disabled{opacity:.35;cursor:default;}
+  /* 撤销：没东西可撤销时用 .off 变灰 —— **不用 disabled**：disabled 的元素收不到鼠标事件、
+     不弹 title，而用户要的就是「鼠标停上去显示要撤销的是哪一步」 */
+  #btnUndo.off{opacity:.4;cursor:default;}
+  #btnUndo.off:hover{background:#fff;}
   html.is-mobile{-webkit-text-size-adjust:100%;}
   /* 顶栏两行（用户定的排法）：第一行 ☰ ＋ 品牌名，第二行整行都是编辑按钮、可左右滑。
      整个 body 竖着排，顶栏自然高度、正文吃剩下的 —— 别再把顶栏高度写死 52px */
@@ -1050,6 +1054,8 @@ async function saveInlineProps(){
   try{
     const n=nodeAt(curPath)||DATA;
     const cur=propsOf(n)||{};
+    const before=snapTree();                         // 改动前的整棵树（撤销用）
+    const curTxt=JSON.stringify(cur);
     // 值被清空的行 → 还原成原值，不当作删除（要删除请点「删」按钮）
     let reverted=false;
     document.querySelectorAll("#detail .prow").forEach(r=>{
@@ -1062,6 +1068,8 @@ async function saveInlineProps(){
     });
     const r=collectInlineProps();
     if(Object.keys(r.props).length) n.props=r.props; else delete n.props;
+    // 值没真变（比如只是把某行还原了）就别记一条空的撤销
+    if(JSON.stringify(n.props||{})!==curTxt) pushUndo("改「"+n.name+"」的属性",before);
     const ok=await save();
     fillDatalists();
     if(r.dropped) toast("有 "+r.dropped+" 行没填属性名，已跳过（补上名字再点别处即可保存）");
@@ -1519,6 +1527,59 @@ function renderNav(){
 })();
 // ==== 搜索 END ====
 
+// ---- 编辑撤销（顶栏最左的「↶ 撤销」＋ Ctrl+Z／⌘Z）----
+// 做法：**每次改动 DATA 之前拍一张整棵树的深拷贝**，撤销＝把树换回上一张快照再存盘。
+// 这样不必给每种编辑各写一遍「怎么反着做」—— 编辑弹窗、抽枝、删除、迁移、植树、
+// 属性栏就地编辑、便携版的「丢掉未导出的改动」，全都自动覆盖。
+const UNDO_MAX=60;
+let undoStack=[];                                    // [{snap,label}]；label 给鼠标停上去看
+const snapTree=()=>JSON.parse(JSON.stringify(DATA));
+function pushUndo(label,snap){
+  undoStack.push({snap:snap||snapTree(), label:label||"改动"});
+  if(undoStack.length>UNDO_MAX) undoStack.shift();
+  renderUndo();
+}
+function renderUndo(){
+  const b=document.getElementById("btnUndo"); if(!b) return;
+  const top=undoStack[undoStack.length-1];
+  b.classList.toggle("off",!top);
+  b.setAttribute("aria-disabled",top?"false":"true");
+  b.title=top? ("撤销："+top.label+"（Ctrl+Z）") : "撤销：没有可撤销的操作";
+}
+function normalizeCur(){                             // 撤销后当前枝可能已经不在了 → 退到最近的祖先
+  const before=curPath.join();
+  while(curPath.length && !nodeAt(curPath)) curPath=curPath.slice(0,-1);
+  if(curPath.join()!==before) curLeaf=0;
+}
+async function doUndo(){
+  const e=undoStack.pop(); if(!e) return toast("没有可撤销的操作");
+  DATA=e.snap;
+  normalizeCur();
+  navReset(curPath);        // 撤销改的是树的结构：原来那条 ◁ ▷ 的路可能已经不存在了，账本重来
+  renderUndo();
+  const ok=await save();
+  render();
+  toast("已撤销："+e.label+(ok?"":"（但没能写回文件，留意一下）"));
+}
+window.__arborUndo={push:pushUndo, undo:doUndo};      // 便携版的「丢掉改动」也来记一笔
+(function mountUndo(){
+  const bar=document.querySelector(".toolbar"); if(!bar) return;
+  const b=document.createElement("button");
+  b.type="button"; b.id="btnUndo"; b.textContent="↶ 撤销";
+  bar.insertBefore(b,bar.firstChild);                 // 放最左：手机上工具条要横滑，它得一直在眼前
+  b.onclick=()=>{ if(undoStack.length) doUndo(); };
+  renderUndo();
+})();
+// Ctrl+Z／⌘Z：**在输入框里让浏览器自己撤销打字**，只有焦点不在输入框时才撤销对树的编辑
+document.addEventListener("keydown",e=>{
+  if(!(e.ctrlKey||e.metaKey) || e.altKey || e.shiftKey || String(e.key).toLowerCase()!=="z") return;
+  const a=document.activeElement, tag=a&&a.tagName;
+  if(tag==="INPUT"||tag==="TEXTAREA"||(a&&a.isContentEditable)) return;
+  if(document.querySelector(".modal.show")) return;    // 弹窗开着时别在它背后悄悄改树
+  if(!undoStack.length) return;
+  e.preventDefault(); doUndo();
+});
+
 // ---- 编辑枝 + 叶 ----
 let editTarget=null;
 let editLeaves=[];
@@ -1620,6 +1681,7 @@ $("#mCxl").onclick=()=>$("#modal").classList.remove("show");
 $("#mSave").onclick=async()=>{
   const n=nodeAt(editTarget)||DATA;
   const nm=$("#mName").value.trim(); if(!nm) return toast("枝名称不能为空");
+  pushUndo("编辑枝「"+(n.name||"未名")+"」");
   n.name=nm;
   n.leaves=collectLeaves().map(l=>({name:l.name||"叶",desc:l.desc||""}));
   delete n.desc;
@@ -1633,6 +1695,7 @@ $("#btnAdd").onclick=async()=>{
   const n=nodeAt(curPath)||DATA;
   const name=prompt("新枝名称", "新枝");
   if(!name)return;
+  pushUndo("在「"+n.name+"」下抽出「"+name+"」");
   n.children=n.children||[]; n.children.push({name,leaves:[{name:"概述",desc:""}],children:[]});
   await save(); goto(curPath.concat(n.children.length-1)); toast("已新增枝");
 };
@@ -1642,6 +1705,7 @@ $("#btnDel").onclick=async()=>{
   if(!curPath.length){ return toast("根不能删除"); }
   const n=nodeAt(curPath); if(!n) return;
   if(!confirm(`确定删除「${n.name}」吗？\n它下面的 ${(n.children||[]).length} 个枝会一并删除。`)) return;
+  pushUndo("删除枝「"+n.name+"」（连带其下 "+(n.children||[]).length+" 枝）");
   const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
   parent.children.splice(idx,1);
   await save();
@@ -1692,6 +1756,7 @@ $("#btnMove").onclick=()=>{
     const curStr=curPath.join(), destStr=destPath.join();
     if(destStr===curStr) return toast("不能移到自身");
     if(curStr && destStr.startsWith(curStr+",")) return toast("不能移到自己的下级内");
+    pushUndo("把「"+n.name+"」迁到「"+(nodeAt(destPath)||DATA).name+"」");
     const parent=nodeAt(curPath.slice(0,-1)); const idx=curPath[curPath.length-1];
     const node=parent.children.splice(idx,1)[0];
     const dest=nodeAt(destPath)||DATA; dest.children=dest.children||[]; dest.children.push(node);
@@ -1807,6 +1872,7 @@ $("#plantOk").onclick=async()=>{
   if(!text.trim()) return toast("请先粘贴或生成树的代码");
   let parsed;
   try{ parsed=codeToTree(text); }catch(e){ return toast("代码有误 —— "+e.message); }
+  const before=snapTree();                       // 改动前的整棵树（撤销用）
   const cur=nodeAt(curPath)||DATA;
   let roots=[], newLeaves=[];
   if(parsed.title) roots=[{name:parsed.title, props:parsed.props, leaves:parsed.leaves, children:parsed.children}];
@@ -1815,6 +1881,7 @@ $("#plantOk").onclick=async()=>{
   delete cur.desc;
   if(roots.length===1 && !newLeaves.length && roots[0].name===cur.name){
     if(!confirm("将用代码覆盖当前枝「"+cur.name+"」的全部叶与下枝，确定？")) return;
+    pushUndo("用代码覆盖枝「"+cur.name+"」",before);
     cur.leaves=roots[0].leaves; cur.children=roots[0].children;
     if(roots[0].props) cur.props=roots[0].props;
     await save(); $("#plantModal").classList.remove("show"); render();
@@ -1831,6 +1898,8 @@ $("#plantOk").onclick=async()=>{
   }
   if(newLeaves.length) cur.leaves=leavesOf(cur).concat(newLeaves);
   if(!added && !replaced && !newLeaves.length) return toast("未做任何改动");
+  pushUndo("植树：新增 "+added+" 枝"+(replaced?"、覆盖 "+replaced+" 枝":"")
+    +(newLeaves.length?"、加叶 "+newLeaves.length+" 片":"")+"（在「"+cur.name+"」下）",before);
   await save(); $("#plantModal").classList.remove("show"); render();
   toast("已植树：新增 "+added+" 枝、覆盖 "+replaced+" 枝"+(skipped?"、跳过 "+skipped:"")+(newLeaves.length?"、加叶 "+newLeaves.length+" 片":""));
 };
