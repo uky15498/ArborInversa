@@ -484,20 +484,15 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
 <div class="modal" id="cloudModal">
   <div class="box">
     <h3 id="cloudTitle">云</h3>
-    <div class="where" id="cloudWhere"></div>
 
-    <!-- 未登录：登录 / 注册 -->
+    <!-- 未登录：登录 / 注册。★ 不解释、不摆服务器地址（地址是程序内置的，用户没得选）★ -->
     <div id="cloudLogin">
-      <label>服务器地址</label>
-      <input id="cloudAddr" placeholder="http://你的服务器:8488" autocomplete="off" spellcheck="false"/>
-      <div class="hint" id="cloudAddrHint"></div>
       <label>用户名</label>
-      <input id="cloudName" placeholder="自己起一个，1~32 字" autocomplete="off"/>
-      <label>口令</label>
+      <input id="cloudName" placeholder="自己起一个" autocomplete="off"/>
+      <label>密码</label>
       <input id="cloudPass" type="password" placeholder="至少 6 位" autocomplete="new-password"/>
       <label>分区</label>
       <div class="cloudpick" id="cloudParts"></div>
-      <div class="snote" id="cloudPartNote"></div>
       <div class="acts">
         <button id="cloudLoginBtn" class="primary">登录</button>
         <button id="cloudRegBtn" class="ghost">注册新账号</button>
@@ -508,11 +503,10 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
     <!-- 已登录：用户数据（★ 分区只在这里和用户名长停时露面） -->
     <div id="cloudMe" style="display:none">
       <div id="cloudMeRows"></div>
-      <div class="snote" id="cloudState"></div>
       <div class="acts" style="flex-wrap:wrap;justify-content:flex-start">
         <button id="cloudPush" class="ghost">把这棵树传上去</button>
         <button id="cloudPull">从云端重取</button>
-        <button id="cloudPassBtn">改口令</button>
+        <button id="cloudPassBtn">改密码</button>
         <button id="cloudOut" class="danger">退出登录</button>
         <button id="cloudClose" class="primary">关闭</button>
       </div>
@@ -2317,6 +2311,9 @@ function mobileUI(){ return document.documentElement.classList.contains("is-mobi
 // 存树带版本号（内容哈希）：云端在别的设备改过 → 409，问用户「覆盖」还是「取云端的」，
 // 绝不默默盖掉。断网时改动留在内存里，回头点「把这棵树传上去」。
 const CLOUD_KEY="arborinversa_cloud";
+// ★ 云端地址是**内置**的：普通用户不需要知道、也没得选（用户明确要求把那一栏去掉）。
+//   要改服务器只改这一行 —— 界面照旧，用户无感。★
+const CLOUD_DEFAULT="https://111.228.57.158/arbor";
 const CLOUD_PARTS=["通","江","止","遇","蟹","臻","山","效","果","假","宕","梗","曾","流","深","咸"];
 const Cloud={
   地址:"", 用户名:"", 分区:"", 令牌:"", 版本:"", 改于:"", 字节:0, 建号:"",
@@ -2325,7 +2322,7 @@ const Cloud={
   on(){ return !!this.令牌; },
   读回(){
     try{ Object.assign(this,JSON.parse(localStorage.getItem(CLOUD_KEY)||"{}")); }catch(e){}
-    if(!this.地址 && /^https?:$/.test(location.protocol)) this.地址=location.origin;   // 网页就是这台服务器发的
+    if(!this.地址) this.地址=CLOUD_DEFAULT;
     return this;
   },
   记住(){
@@ -2381,19 +2378,12 @@ function 刷云端界面(){
     b.title=Cloud.on()? "云端账号 —— 点开看用户数据（鼠标停在用户名上也会浮出来）"
                       : "登录云端：把树存到自己的服务器里，换设备也能接着写";
   }
-  const st=document.getElementById("cloudState");
-  if(st){
-    st.className="snote"+(Cloud.on()&&!Cloud.未上传?" on":"");
-    st.textContent=!Cloud.on()? "· 没登录，现在用的是本地那份内容"
-      : (Cloud.未上传? "· 有改动还没传上云端 —— 点「把这棵树传上去」" : "· 已同步");
-  }
   const rows=document.getElementById("cloudMeRows");
   if(rows && Cloud.on()){
     const kb=Cloud.字节/1024;
     rows.innerHTML=[
       ["用户名",esc(Cloud.用户名)],
       ["分区",esc(Cloud.分区)+"摄"],
-      ["服务器",esc(云地址())],
       ["建号",esc(String(Cloud.建号||"—").slice(0,19).replace("T"," "))],
       ["最后改于",esc(String(Cloud.改于||"—").slice(0,19).replace("T"," "))],
       ["云端那棵树",(Cloud.字节? (kb<1? Cloud.字节+" 字节" : kb.toFixed(1)+" KB") : "—")+"　版本 "+esc(String(Cloud.版本||"—").slice(0,8))],
@@ -2424,24 +2414,13 @@ function 选中的分区(){
   const on=document.querySelector("#cloudParts button.on");
   return on? on.dataset.p : "";
 }
-function 写分区提示(){
-  const n=document.getElementById("cloudPartNote"); if(!n) return;
-  const 占=document.querySelectorAll("#cloudParts button.cand").length;
-  n.textContent = 占
-    ? "浅色的那些已经有主了 —— 登录就点你自己的那个；新注册用空着的。"
-    : "默认挑了第一个，想换哪个点哪个。";
-}
+// ★ 分区下面不再写任何小字（用户：「用户本来就知道他是干啥的，好的 UI 不需要太多解释」）——
+//   只留一个「有没有被别人占」的可视差别：浅色的＝有主。★
+function 写分区提示(){}
 function 开云面板(){
   document.getElementById("cloudLogin").style.display=Cloud.on()? "none" : "";
   document.getElementById("cloudMe").style.display=Cloud.on()? "" : "none";
   document.getElementById("cloudTitle").textContent=Cloud.on()? "用户数据" : "云";
-  document.getElementById("cloudWhere").textContent=Cloud.on()
-    ? "不登录时用的还是本地那份内容；登录后 load/save 都走云端。"
-    : "用户名 ＋ 口令 ＋ 分区。";
-  const a=document.getElementById("cloudAddr"); if(a) a.value=Cloud.地址||"";
-  const h=document.getElementById("cloudAddrHint");
-  if(h) h.textContent=(Cloud.地址 && Cloud.地址===location.origin && /^https?:$/.test(location.protocol))
-    ? "（网页就是这台服务器发的，留空也行）" : "形如 http://1.2.3.4:8488，末尾不要斜杠";
   if(Cloud.on()) 刷云端界面(); else 画分区([]);
   document.getElementById("cloudModal").classList.add("show");
 }
@@ -2462,11 +2441,9 @@ async function 云登录认人(名,令){
 async function 云上按(动作){
   const 名=document.getElementById("cloudName").value.trim();
   const 令=document.getElementById("cloudPass").value;
-  const 址=document.getElementById("cloudAddr").value.trim();
-  if(址) Cloud.地址=址.replace(/\/+$/,"");
-  if(!Cloud.地址) return toast("先填服务器地址");
+  if(!Cloud.地址) Cloud.地址=CLOUD_DEFAULT;
   if(!名) return toast("先填用户名");
-  if(令.length<6) return toast("口令至少 6 位");
+  if(令.length<6) return toast("密码至少 6 位");
   try{
     // ★ 登录**不带分区**（除非用户自己点过）：让服务端按「名字＋口令」认人，
     //   同名跨多个区时它会回候选让用户选；注册才带分区。
@@ -2487,7 +2464,7 @@ async function 云上按(动作){
         document.querySelectorAll("#cloudParts button").forEach(x=>x.classList.remove("on"));
         选它.classList.add("on"); 分区手选=选它.dataset.p; 写分区提示();
         toast(动作==="reg"
-          ? "「"+占.join("、")+"」已经有主了 —— 已给你换到「"+选它.dataset.p+"」，再点一次注册"
+          ? "「"+占.join("、")+"」已经有主了 —— 已换到「"+选它.dataset.p+"」，再点一次"
           : "口令不对。这个名字在「"+占.join("、")+"」都有账号 —— 已替你选中「"+选它.dataset.p+"」，不对就点浅色的另一个");
       }else{
         toast("这个名字的 16 个区都占满了 —— 换一个用户名吧");
@@ -2602,9 +2579,9 @@ function 收用户条(){ const e=document.getElementById("cloudPop"); if(e) e.re
     }catch(e){ toast("取不回来："+e.message); }
   };
   document.getElementById("cloudPassBtn").onclick=async()=>{
-    const 旧=prompt("现在的口令："); if(旧==null) return;
-    const 新=prompt("新口令（至少 6 位）："); if(!新) return;
-    try{ await Cloud.改口令(旧,新); toast("口令改了 —— 别的设备要重新登录"); }
+    const 旧=prompt("现在的密码："); if(旧==null) return;
+    const 新=prompt("新密码（至少 6 位）："); if(!新) return;
+    try{ await Cloud.改口令(旧,新); toast("密码改了 —— 别的设备要重新登录"); }
     catch(e){ toast("没改成："+e.message); }
   };
   document.getElementById("cloudOut").onclick=()=>{
