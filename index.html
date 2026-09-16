@@ -495,7 +495,7 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
       <input id="cloudName" placeholder="自己起一个，1~32 字" autocomplete="off"/>
       <label>口令</label>
       <input id="cloudPass" type="password" placeholder="至少 6 位" autocomplete="new-password"/>
-      <label>分区<span class="where" style="display:inline;margin-left:6px">（广韵十六摄，同名的人各占一区）</span></label>
+      <label>分区</label>
       <div class="cloudpick" id="cloudParts"></div>
       <div class="snote" id="cloudPartNote"></div>
       <div class="acts">
@@ -2086,7 +2086,11 @@ function mobileUI(){ return document.documentElement.classList.contains("is-mobi
   window.addEventListener("resize",placeEpigraph);   // 窄↔宽切换时归位（顶栏那条 resize 挂在前面，先跑）
 })();
 
-// ==== 云端（账号 ＋ 广韵十六摄分区）==========================================
+// ==== 云端（账号 ＋ 分区）====================================================
+// ★ 分区就是**广韵十六摄**（通江止遇蟹臻山效果假宕梗曾流深咸）。
+//   ★★ 但界面上**绝不明说这一点**（用户要求：「要有彩蛋思维，明说就不有趣了」）——
+//      不给标签加解释、不给分区行加注解、不提「广韵」二字。懂的人看到这 16 个字自然认得，
+//      不懂的人看到的只是「16 个可以挑的字」，照样用得好好的。★★
 // 与本地存取的关系：**没登录＝照旧用本地那份**（exe/WSL 的 data.json、便携版自己的负载）；
 // **登录之后 load/save 都走云端**，本地那份原样不动（退出登录就回到它）。
 // 存树带版本号（内容哈希）：云端在别的设备改过 → 409，问用户「覆盖」还是「取云端的」，
@@ -2167,7 +2171,7 @@ function 刷云端界面(){
     const kb=Cloud.字节/1024;
     rows.innerHTML=[
       ["用户名",esc(Cloud.用户名)],
-      ["分区",esc(Cloud.分区)+"摄　<span class='where'>（广韵十六摄之一，同名的人靠它分开）</span>"],
+      ["分区",esc(Cloud.分区)+"摄"],
       ["服务器",esc(云地址())],
       ["建号",esc(String(Cloud.建号||"—").slice(0,19).replace("T"," "))],
       ["最后改于",esc(String(Cloud.改于||"—").slice(0,19).replace("T"," "))],
@@ -2203,8 +2207,8 @@ function 写分区提示(){
   const n=document.getElementById("cloudPartNote"); if(!n) return;
   const 占=document.querySelectorAll("#cloudParts button.cand").length;
   n.textContent = 占
-    ? "有 "+占+" 个区已经有同名的人了（浅色的那些）—— **登录**就点你自己的那个区；**新注册**会用到空着的区。"
-    : "这个名字 16 个区都空着，默认给你挑了第一个；想换哪个点哪个。";
+    ? "浅色的那些已经有主了 —— 登录就点你自己的那个；新注册用空着的。"
+    : "默认挑了第一个，想换哪个点哪个。";
 }
 function 开云面板(){
   document.getElementById("cloudLogin").style.display=Cloud.on()? "none" : "";
@@ -2212,7 +2216,7 @@ function 开云面板(){
   document.getElementById("cloudTitle").textContent=Cloud.on()? "用户数据" : "云";
   document.getElementById("cloudWhere").textContent=Cloud.on()
     ? "不登录时用的还是本地那份内容；登录后 load/save 都走云端。"
-    : "用户名 ＋ 口令 ＋ 分区。分区是广韵十六摄，用来让同名的人各占一格。";
+    : "用户名 ＋ 口令 ＋ 分区。";
   const a=document.getElementById("cloudAddr"); if(a) a.value=Cloud.地址||"";
   const h=document.getElementById("cloudAddrHint");
   if(h) h.textContent=(Cloud.地址 && Cloud.地址===location.origin && /^https?:$/.test(location.protocol))
@@ -2262,7 +2266,7 @@ async function 云上按(动作){
         document.querySelectorAll("#cloudParts button").forEach(x=>x.classList.remove("on"));
         选它.classList.add("on"); 分区手选=选它.dataset.p; 写分区提示();
         toast(动作==="reg"
-          ? "「"+占.join("、")+"」已经有同名的人了 —— 已给你换到「"+选它.dataset.p+"」区，再点一次注册"
+          ? "「"+占.join("、")+"」已经有主了 —— 已给你换到「"+选它.dataset.p+"」，再点一次注册"
           : "口令不对。这个名字在「"+占.join("、")+"」都有账号 —— 已替你选中「"+选它.dataset.p+"」，不对就点浅色的另一个");
       }else{
         toast("这个名字的 16 个区都占满了 —— 换一个用户名吧");
