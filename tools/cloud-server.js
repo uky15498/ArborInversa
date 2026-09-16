@@ -17,7 +17,9 @@
 //   media/<摄>/<用户名>/<值>.<后缀>   插图（第二阶段）
 //   .secret                       签令牌用的密钥，首次启动自动生成
 //
-// 跑起来：
+// 跑起来（★ 推荐带 --site：网页和接口同源，就不用域名、不用证书，详见下）：
+//   node cloud-server.js --port 8488 --root /var/lib/arborinversa-cloud --site ./site
+//     —— site/ 里放便携版 index.html 和 media/，手机打开 http://<这台机的IP>:8488/ 就是应用
 //   node cloud-server.js --port 8488 --root /var/lib/arborinversa-cloud
 //   直接上 HTTPS（不用 nginx 也行）：
 //     node cloud-server.js --port 8443 --tls-key key.pem --tls-cert fullchain.pem
@@ -36,6 +38,14 @@
 //
 // ★ 口令用 scrypt 加盐哈希，令牌是 HMAC 签名的（服务端不存会话，重启不用重登）。
 // ★ 客户端跨域来（GitHub Pages 那份便携版）靠 CORS 头，见 CORS 一节。
+//
+// ★★ 要不要域名？——**不用**，只要网页也从这台服务器发（--site）：
+//   · 双击打开的便携版（file://）能直接调 http 接口 —— 实测通
+//   · 服务器自己发的网页（同源 http）—— 实测通
+//   · 只有「https 页面调 http 公网接口」会被浏览器当混合内容拦掉（实测：内网地址放行、公网地址拦）
+//     —— 所以 GitHub Pages 上那份要想连过来，才需要 https，也就才需要域名
+//   国内服务器上，80/443 跑未备案的域名会被云厂商拦；**非标端口 ＋ IP** 一般不涉及备案
+//   （记得在安全组/防火墙放行端口）。纯 http 口令与令牌是明文过网的，介意就上自签证书（--tls-key/--tls-cert）。
 'use strict';
 
 const http = require('http');
@@ -57,6 +67,7 @@ const HOST = arg('host', '0.0.0.0');
 const ROOT = path.resolve(arg('root', path.join(__dirname, '..', 'cloud-data')));
 const TLS_KEY = arg('tls-key', '');
 const TLS_CERT = arg('tls-cert', '');
+const SITE = arg('site', '');                          // 顺带把网页也发出去（见下）
 const MAX_BODY = parseInt(arg('max-body', String(16 * 1024 * 1024)), 10);   // 16 MB
 
 const DIR_ACC = path.join(ROOT, 'accounts');
@@ -256,6 +267,37 @@ function doSaveTree(body, who) {
   return { code: 200, out: { ok: true, 版本: treeVersion(tree), 改于: acc.updated } };
 }
 
+// ---- 顺带把网页发出去（--site <目录>）------------------------------------
+// ★ 这一步是为了**不用域名**：网页和接口都从这台机器、这个端口出去，就是「同源」，
+//   浏览器不会拦 https 页面向 http 接口要数据（混合内容），也不需要证书。
+//   目录里放便携版 HTML（index.html）和 media/ 就行。
+const MIME = {
+  html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8',
+  css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8',
+  txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8',
+  svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  webp: 'image/webp', gif: 'image/gif', ico: 'image/x-icon', avif: 'image/avif',
+};
+function serveSite(req, res, urlPath) {
+  const rootDir = path.resolve(SITE);
+  let rel = decodeURIComponent(urlPath);
+  if (rel === '/' || rel === '') rel = '/index.html';
+  const file = path.resolve(path.join(rootDir, rel));
+  if (file !== rootDir && !file.startsWith(rootDir + path.sep)) {   // ★ 挡住 ../../ 穿越
+    return send(res, 403, { ok: false, error: '不许往外走' });
+  }
+  fs.readFile(file, (err, buf) => {
+    if (err) return send(res, 404, { ok: false, error: '没有这个文件：' + rel });
+    const ext = path.extname(file).slice(1).toLowerCase();
+    res.writeHead(200, Object.assign({
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Content-Length': buf.length,
+      'Cache-Control': ext === 'html' ? 'no-cache' : 'public, max-age=300',
+    }, CORS));
+    res.end(buf);
+  });
+}
+
 // ---- 路由 ----
 async function route(req, res) {
   const u = new URL(req.url || '/', 'http://x');
@@ -267,7 +309,11 @@ async function route(req, res) {
   if (声明长度 > MAX_BODY) return send(res, 413, { ok: false, error: '内容太大（上限 ' + Math.round(MAX_BODY / 1048576) + ' MB）' });
 
   if (req.method === 'GET' && (p === '/' || p === '/api/health')) {
+    if (p === '/' && SITE) return serveSite(req, res, '/');     // 有 --site 就先发网页
     return send(res, 200, { ok: true, 服务: 'arborinversa-cloud', 版本: 1, 分区: PARTS, 账号数: countAccounts() });
+  }
+  if (SITE && req.method === 'GET' && p.indexOf('/api/') !== 0) {   // 静态网页/图片
+    return serveSite(req, res, u.pathname);
   }
   if (req.method === 'GET' && p === '/api/parts') {
     const name = nameOK(u.searchParams.get('name') || '');
@@ -321,7 +367,6 @@ async function route(req, res) {
   }
   return send(res, 404, { ok: false, error: '没有这个接口：' + p });
 }
-
 function countAccounts() {
   let n = 0;
   for (const part of PARTS) {
@@ -354,5 +399,7 @@ server.listen(PORT, HOST, () => {
   console.log('逆生树 · 云端已启动：  ' + scheme + '://' + (HOST === '0.0.0.0' ? '本机地址' : HOST) + ':' + PORT + '/api/health');
   console.log('· 数据目录：' + ROOT);
   console.log('· 现有账号：' + countAccounts() + ' 个（分区：' + PARTS.join(' ') + '）');
+  if (SITE) console.log('· 网页目录：' + path.resolve(SITE) + '（打开 ' + scheme + '://' + (HOST === '0.0.0.0' ? '<本机IP>' : HOST) + ':' + PORT + '/ 就是应用）');
+  else console.log('· 没配 --site：只提供接口。想让手机/别的设备直接打开应用就加上 --site <便携版所在目录>');
   if (HOST === '0.0.0.0' && !(TLS_KEY && TLS_CERT)) console.log('⚠ 现在跑的是明文 HTTP —— 对外一定要挂 HTTPS（--tls-key/--tls-cert，或用 nginx 反代）');
 });
