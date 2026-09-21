@@ -2174,7 +2174,13 @@ function 刷云端界面(){
 //   所以一律画成「可点的候选样式」，另外用 分区手选 记住用户是不是自己点过的：
 //   **登录不带分区**（让服务端按名字+口令认人；同名跨多区它会让你选），注册才带。
 let 分区手选="";
-function 画分区(占用){
+// ★ 默认高亮谁，分两种情形 —— 以前一律高亮「第一个空区」，对**老用户**就是把手指向坑里：
+//   这个名字已经有主（登录）→ 高亮第一个有主的（浅色的那些里最可能是你的）
+//   这个名字还没人用（注册）→ 高亮第一个空区
+//   （用户实际踩过：默认高亮的「通」是空区，他一点、一登录，服务端说「通区没这个账号」，
+//     而客户端当时一律喊「口令不对」—— 口令明明是对的，让他对着密码反复重试。）
+// ★ 高亮只是**提示**，不等于选中：真正算数的是 分区手选（用户亲手点过的那个）。
+function 画分区(占用, 用途){
   const host=document.getElementById("cloudParts"); if(!host) return;
   const 占=new Set(占用||[]);
   分区手选="";
@@ -2185,8 +2191,11 @@ function 画分区(占用){
       b.classList.add("on"); 分区手选=b.dataset.p; 写分区提示();
     };
   });
-  const 空=[...host.querySelectorAll("button")].find(b=>!b.classList.contains("cand"));
-  if(空) 空.classList.add("on");                      // 默认挑第一个空着的（浅色的那些是别人的）
+  const 全部=[...host.querySelectorAll("button")];
+  const 有主=全部.filter(b=>b.classList.contains("cand"));
+  const 空着=全部.filter(b=>!b.classList.contains("cand"));
+  const 默认=(用途==="reg" ? (空着[0]||有主[0]) : (有主[0]||空着[0]));
+  if(默认) 默认.classList.add("on");
   写分区提示();
 }
 function 选中的分区(){
@@ -2196,11 +2205,19 @@ function 选中的分区(){
 // ★ 分区下面不再写任何小字（用户：「用户本来就知道他是干啥的，好的 UI 不需要太多解释」）——
 //   只留一个「有没有被别人占」的可视差别：浅色的＝有主。★
 function 写分区提示(){}
+// 名字一变就去问服务器：哪几个区被占了 —— 好把默认高亮指向「你可能在的那个区」。
+// ★ 开面板时也调一次：名字框里往往还留着上次的用户名，不查的话高亮会停在「第一个空区」。
+async function 查名字并画(名, 用途){
+  if(!名 || !Cloud.地址){ 画分区([], 用途); return; }
+  try{ const d=await Cloud.查分区(名); 画分区(d.占用, 用途); }
+  catch(e){ 画分区([], 用途); }
+}
 function 开云面板(){
   document.getElementById("cloudLogin").style.display=Cloud.on()? "none" : "";
   document.getElementById("cloudMe").style.display=Cloud.on()? "" : "none";
   document.getElementById("cloudTitle").textContent=Cloud.on()? "用户数据" : "云";
-  if(Cloud.on()) 刷云端界面(); else 画分区([]);
+  if(Cloud.on()) 刷云端界面();
+  else 查名字并画(document.getElementById("cloudName").value.trim(), "login");
   document.getElementById("cloudModal").classList.add("show");
 }
 // 登录认人：服务端只认「名字＋口令」。同名跨多个区时，拿同一个口令逐个候选区试 ——
@@ -2223,10 +2240,11 @@ async function 云上按(动作){
   if(!Cloud.地址) Cloud.地址=CLOUD_DEFAULT;
   if(!名) return toast("先填用户名");
   if(令.length<6) return toast("密码至少 6 位");
+  let 区="";                                         // ★ 声明在 try 外：catch 里要讲清「你点的是哪个区」
   try{
     // ★ 登录**不带分区**（除非用户自己点过）：让服务端按「名字＋口令」认人，
     //   同名跨多个区时它会回候选让用户选；注册才带分区。
-    const 区 = 动作==="reg" ? (分区手选||选中的分区()) : 分区手选;
+    区 = 动作==="reg" ? (分区手选||选中的分区()) : 分区手选;
     if(动作==="reg" && !confirm("注册新账号：「"+名+"」进「"+区+"」区。\n口令忘了找不回来（服务器只存哈希），记牢。确定吗？")) return;
     const d = 动作==="reg" ? await Cloud.注册(名,令,区)
                            : (区 ? await Cloud.登录(名,令,区) : await 云登录认人(名,令));
@@ -2234,23 +2252,31 @@ async function 云上按(动作){
   }catch(e){
     const 回话=e.回话||{};
     const 占=回话.候选||回话.占用;                     // 登录给「候选」，注册撞名给「占用」
+    // ★ 已经登录着的时候再点一次「登录」，失败了不该让人以为掉线 —— 这句得跟上去
+    const 还在=()=>Cloud.on()? "（你现在仍以「"+Cloud.用户名+"」登录着，没掉线）" : "";
     if(占 && 占.length){
-      画分区(占);
+      画分区(占, 动作==="reg" ? "reg" : "login");
       const 空=[...document.querySelectorAll("#cloudParts button")].find(b=>!b.classList.contains("cand"));
       const 首个候选=document.querySelector("#cloudParts button.cand");
       const 选它 = 动作==="reg" ? 空 : 首个候选;         // 注册跳空区，登录选中第一个候选
       if(选它){
         document.querySelectorAll("#cloudParts button").forEach(x=>x.classList.remove("on"));
         选它.classList.add("on"); 分区手选=选它.dataset.p; 写分区提示();
-        toast(动作==="reg"
-          ? "「"+占.join("、")+"」已经有主了 —— 已换到「"+选它.dataset.p+"」，再点一次"
-          : "口令不对。这个名字在「"+占.join("、")+"」都有账号 —— 已替你选中「"+选它.dataset.p+"」，不对就点浅色的另一个");
+        if(动作==="reg"){
+          toast("「"+占.join("、")+"」已经有主了 —— 已换到「"+选它.dataset.p+"」，再点一次");
+        }else if(e.状态===401){
+          toast("口令不对。这个名字在「"+占.join("、")+"」都有账号 —— 已替你选中「"+选它.dataset.p+"」，不对就点浅色的另一个");
+        }else{
+          // ★ 这里是 404：**口令是对的**，只是「你点的那个区里没有这个账号」。
+          //   以前一律喊「口令不对」，把分区选错说成密码错，用户就对着正确密码反复重试（实际踩过）。
+          toast("「"+(区||"你点的那个")+"」区里没有「"+名+"」这个账号 —— 你在「"+占.join("、")+"」区。已替你选中「"+选它.dataset.p+"」，再点一次"+还在());
+        }
       }else{
         toast("这个名字的 16 个区都占满了 —— 换一个用户名吧");
       }
       return;
     }
-    toast("没成："+e.message);
+    toast("没成："+e.message+还在());
   }
 }
 async function 登录之后(d){
@@ -2338,11 +2364,7 @@ function 收用户条(){ const e=document.getElementById("cloudPop"); if(e) e.re
   const 名框=document.getElementById("cloudName");
   名框.addEventListener("input",()=>{                      // 边打名字边问服务器：哪几个区被占了
     clearTimeout(名框._t);
-    名框._t=setTimeout(async ()=>{
-      const 名=名框.value.trim();
-      if(!名 || !Cloud.地址){ 画分区([]); return; }
-      try{ const d=await Cloud.查分区(名); 画分区(d.占用); }catch(e){ 画分区([]); }
-    },400);
+    名框._t=setTimeout(()=>查名字并画(名框.value.trim(),"login"),400);
   });
   document.getElementById("cloudPush").onclick=async()=>{
     try{ await Cloud.存树(DATA,true); toast("已把这棵树传到云端"); 刷云端界面(); }

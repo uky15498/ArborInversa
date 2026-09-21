@@ -190,9 +190,10 @@ Required Notice: Copyright (c) 2026 elu
 自测（都**从 `index.html` 里抽取真实实现**来跑，不依赖浏览器）：
 
 ```bash
-node tools/tree.test.js     # 29 项：夹具就是仓库自带的示例树，谁 clone 下来都能跑
+node tools/tree.test.js     # 37 项：夹具就是仓库自带的示例树，谁 clone 下来都能跑
 node tools/codec.test.js    # 28 项：树 ⇄ 文本代码（需要一份内容数据，没有会提示跳过）
 node tools/search.test.js   # 45 项：搜索 与 枝属性（同上）
+node tools/cloud.test.js    # 17 项：云端登录的分区/口令提示（不联网，fetch 由假服务器接管）
 ```
 
 两条约定：

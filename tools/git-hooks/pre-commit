@@ -1,7 +1,8 @@
 #!/bin/sh
 # 提交前自检（启用方式：git config core.hooksPath tools/git-hooks）
 #   1) 编解码自测  2) 搜索/属性自测  3) 示例树自测（不依赖个人内容）
-#   4) 线上那份便携版（docs/index.html）是否最新  5) 仓库 data.json 仍是示例树
+#   4) 云端登录自测（不联网）  5) 线上那份便携版（docs/index.html）是否最新
+#   6) 仓库 data.json 仍是示例树
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
@@ -13,6 +14,9 @@ node tools/search.test.js > /dev/null || { echo "× 搜索自测未通过，提�
 
 echo "· 示例树自测…"
 node tools/tree.test.js > /dev/null || { echo "× 示例树自测未通过，提交中止"; exit 1; }
+
+echo "· 云端登录自测…"
+node tools/cloud.test.js > /dev/null || { echo "× 云端登录自测未通过（分区/口令的提示别再说错）"; exit 1; }
 
 echo "· 检查线上那份便携版是否最新…"
 node tools/build_web.js --check > /dev/null || {
