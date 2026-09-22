@@ -518,9 +518,9 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
 
 <div class="modal" id="cloudConflict">
   <div class="box">
-    <h3>云端在别处改过了</h3>
+    <h3 id="ccTitle">云端在别处改过了</h3>
     <div class="where" id="ccWhere"></div>
-    <div class="snote">两边都改过同一棵树。要留下哪一份？（另一份不会自动备份，选之前想一下）</div>
+    <div class="snote" id="ccNote">两边都改过同一棵树。要留下哪一份？（另一份不会自动备份，选之前想一下）</div>
     <div class="acts">
       <button id="ccMine" class="danger">用我这边的覆盖云端</button>
       <button id="ccTheirs" class="primary">取云端的，丢我这边的改动</button>
@@ -2333,7 +2333,7 @@ async function 登录之后(d){
     // ★★ 两边都有树、内容却不一样 —— **绝不能默默拿云端那份盖掉手上的**。
     //    用户实际踩过：本地刚补完一批内容，一登录就被云端的旧树顶掉，看着像白干了。
     //    这里改用保存冲突那套弹窗，让用户自己挑留哪份。★
-    const 取=await 云端冲突({远端版本:t.版本, 远端改于:t.改于});
+    const 取=await 云端冲突({远端版本:t.版本, 远端改于:t.改于}, "登录");
     if(取==="mine"){
       await Cloud.存树(DATA,true);
       toast("已用你手上这份覆盖云端");
@@ -2360,9 +2360,21 @@ function 记云端信息(d){
   Cloud.记住(); 刷云端界面();
 }
 // 冲突：云端在别的设备改过 —— 让用户自己决定留哪一份
-function 云端冲突(回话){
+function 云端冲突(回话, 开场){
   return new Promise(解决=>{
     const m=document.getElementById("cloudConflict");
+    // ★ 同一个弹窗有三种用场，标题得说实话：
+    //   开程序／登录时是「本机这份和云端那份不一样」，不是「云端在别处改过了」——
+    //   后者会让用户以为是自己别的设备改的，从而错选「取云端的」，把本机的改动丢掉。
+    const 场景说明={
+      开程序:["本机这份和云端那份不一样",
+              "两边都有树、内容却不同。要留哪一份？（另一份不会自动备份，选之前想一下）"],
+      登录:  ["本机这份和云端那份不一样",
+              "刚登上的账号里已有一棵树，和本机这份不同。要留哪一份？（另一份不会自动备份，选之前想一下）"],
+    }[开场] || ["云端在别处改过了",
+              "两边都改过同一棵树。要留下哪一份？（另一份不会自动备份，选之前想一下）"];
+    document.getElementById("ccTitle").textContent=场景说明[0];
+    document.getElementById("ccNote").textContent=场景说明[1];
     document.getElementById("ccWhere").textContent="云端最后改于 "+
       String((回话&&回话.远端改于)||"").slice(0,19).replace("T"," ")+
       "（版本 "+String((回话&&回话.远端版本)||"").slice(0,8)+"）";
@@ -2465,7 +2477,7 @@ const 起手 = (async () => {
   const 本地非空=!!((本地.leaves||[]).length || (本地.children||[]).length);
   const 云端非空=!!(t.tree.leaves.length || t.tree.children.length);
   if(云端非空 && 本地非空 && JSON.stringify(本地)!==JSON.stringify(t.tree)){
-    const 取=await 云端冲突({远端版本:t.版本, 远端改于:t.改于});
+    const 取=await 云端冲突({远端版本:t.版本, 远端改于:t.改于}, "开程序");
     if(取==="mine"){
       try{ await Cloud.存树(本地,true); toast("已用本机这份覆盖云端"); }
       catch(e){ toast("没传上去："+e.message); }

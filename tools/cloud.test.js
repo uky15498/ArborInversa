@@ -41,6 +41,26 @@ const 等一下 = (ms = 0) => new Promise(r => require('timers').setTimeout(r, m
 const 待点 = { mine: null, theirs: null };
 const 点冲突 = (哪个) => { const h = 待点[哪个]; assert(h, '冲突弹窗上还没有「' + 哪个 + '」的按钮'); h(); };
 
+// ── 1b) 再切出「初始化」那一段（起手＝开程序时的取树逻辑，在云端段之外）──
+//   ★ 用户那次「一登录旧树就盖掉新树」，走的正是这条开程序路径，
+//     所以它必须也在自测覆盖之内，不能只测登录按钮那条。
+function loadInit() {
+  const lines = fs.readFileSync(HTML, 'utf8').split('\n');
+  const begin = lines.findIndex(l => l.includes('---- 初始化 ----'));
+  assert(begin >= 0, '在 index.html 里找不到「初始化」段标记');
+  // 这一段一直写到 </script> 之前（以「初始化」标记为起点到脚本结束），最稳
+  let end = lines.length - 1;
+  for (let i = begin + 1; i < lines.length; i++) {
+    if (lines[i].includes('</script>')) { end = i - 1; break; }
+  }
+  assert(end > begin, '找不到「初始化」段的收尾（</script>）');
+  // 只取到 `起手` 那串 .then/.catch 链结束：从后往前找第一行以 `});` 结尾的
+  let 链尾 = -1;
+  for (let i = end; i > begin; i--) { if (lines[i].trim().endsWith('});')) { 链尾 = i; break; } }
+  assert(链尾 > begin, '找不到 起手 链的结尾');
+  return lines.slice(begin, 链尾 + 1).join('\n');
+}
+
 // ── 2) 假的浏览器环境（够云端那段用就行）────────────────────────────────
 function 造环境() {
   const BTN = [];
@@ -143,7 +163,8 @@ function 造假服务器() {
       return 回(200, { ok: true, name: body.name, part: 区, token: 'TOKEN-' + 区 });
     }
     if (p === '/api/tree' && 方法 === 'GET') {
-      return 回(200, { ok: true, tree: { name: '逆生树', leaves: [{ name: '概述', desc: '逆生树…' }], children: [] }, 版本: 剧本.版本, 改于: '2026-09-22T00:00:00Z' });
+      const 树 = 剧本.树 || { name: '逆生树', leaves: [{ name: '概述', desc: '逆生树…' }], children: [] };
+      return 回(200, { ok: true, tree: 树, 版本: 剧本.版本, 改于: '2026-09-22T00:00:00Z' });
     }
     if (p === '/api/tree' && 方法 === 'PUT') {
       return 回(200, { ok: true, 版本: 剧本.版本, 改于: '2026-09-22T00:00:00Z' });
@@ -157,7 +178,7 @@ function 造假服务器() {
 }
 
 // ── 4) 装好环境、求值真实云端代码 ────────────────────────────────────────
-function 起云() {
+function 起云(含起手, 本地树) {
   const env = 造环境(), srv = 造假服务器();
   const TOASTS = [];
   const g = globalThis;
@@ -179,13 +200,26 @@ function 起云() {
   g.render = () => {}; g.navReset = () => {};
   g.leavesOf = t => (t && t.leaves) || [];
   const 本地写盘 = [];
-  g.Store = { load: async () => ({ name: '本地树', leaves: [], children: [] }),
+  // ★ 本地那份必须**建沙箱时就给**：起手 在代码求值时就已经跑起来并调了 Store.load()，
+  //   事后再去改 Store.load 已经晚了（它拿到的还是空树，于是根本不认为有冲突）。
+  g.Store = { load: async () => (本地树 || { name: '本地树', leaves: [], children: [] }),
               save: async (d) => { 本地写盘.push(d); } };
+  // ★ 初始化段还用到这几个主脚本里的东西，补上桩
+  g.$ = () => ({ innerHTML: '', textContent: '', value: '', style: {}, dataset: {},
+                 classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
+                 addEventListener(){}, querySelectorAll(){ return []; } });
+  g.scanMissingImgs = () => {};
+  g.LS_KEY = 'arborinversa_nav';
+  g.hist = [];
   g.DATA = { name: '本机那份', leaves: [{ name: 'a', desc: 'x' }], children: [] };
   g.curPath = []; g.curLeaf = 0;
 
-  const api = new Function(loadCloud() + `
+  // ★ 两段必须放进**同一个** Function 求值：浏览器里它们在同一个 <script> 作用域，
+  //   分成两次 new Function 的话，初始化段就看不见 Cloud 这些绑定了。
+  const 主体 = loadCloud() + (含起手 ? '\n' + loadInit() : '');
+  const api = new Function(主体 + `
     return { Cloud, 云上按, 云登录认人, 画分区, 开云面板,
+             起手: (typeof 起手 !== "undefined") ? 起手 : null,
              // 老版本没有 查名字并画（它是这次修复加的）—— 退化成等价动作，
              // 好让这套测试能拿去跑「修复前」的前端，亲眼看见断言把 bug 抓住。
              查名字并画: (typeof 查名字并画 === "function")
@@ -434,6 +468,69 @@ const 不含 = (s, 片段) => assert(!String(s).includes(片段), `不该出现�
         assert.strictEqual(c.本地写盘.length, 0, '一样就不该再写一遍本地');
       });
     } finally { 冲突答复 = 'theirs'; c.复原(); }
+  }
+
+  // ── ★ 开程序那条路径：已登录 + 本地与云端不一样，也必须问 ──
+  // ★ 起手 的第一句是 await Store.load()，会先让出一拍；
+  //   所以我们**同步**地在它恢复之前把令牌塞好，它下面那句 Cloud.on() 就为真了。
+  const 跑起手 = (本地树, 答复) => {
+    冲突答复 = 答复;                                     // 也要赶在弹窗出现之前设好
+    const c = 起云(true, 本地树);
+    c.api.Cloud.读回();                                  // 地址取内置默认
+    c.api.Cloud.收下({ token: 'TOKEN-流', name: 'Urgestalt', part: '流' });
+    const 云端树 = { name: '云端的树', leaves: [{ name: '概述', desc: '云' }], children: [] };
+    c.srv.剧本.树 = 云端树;
+    return { c, p: c.api.起手, 云端树 };
+  };
+  const 本机树 = () => ({ name: '本机补完的树', leaves: [{ name: '概述', desc: '本' }], children: [] });
+
+  {
+    const r = 跑起手(本机树(), null);                    // 不自动应答 → 应当停在弹窗上
+    ok('前置：开程序时确实处于已登录状态', () => {
+      assert.strictEqual(r.c.api.Cloud.on(), true);
+    });
+    await 等一下(5);
+    ok('★ 开程序：本地与云端都有树且不同 → 弹窗问，不默默覆盖', () => {
+      assert.strictEqual(r.c.env.els.cloudConflict && r.c.env.els.cloudConflict.classList.contains('show'), true,
+        '没弹窗就等于开程序时默默把本机那份换掉了');
+    });
+    ok('开程序弹窗说的是实话（不是「云端在别处改过了」）', () => {
+      const t = r.c.env.els.ccTitle;
+      assert(t, '标题元素都还没建，说明弹窗根本没出来');
+      assert(t.textContent.includes('本机'), '实际：' + t.textContent);
+    });
+    ok('开程序：还没选之前，不往云端写任何东西', () => {
+      assert.strictEqual(r.c.srv.剧本.请求.some(x => x.startsWith('PUT /api/tree')), false);
+    });
+    点冲突('theirs');
+    const 结果 = await r.p;
+    ok('开程序选了「取云端的」→ 用云端那份，并把本地镜像更新', () => {
+      assert.strictEqual(结果.name, '云端的树');
+      assert(r.c.本地写盘.length > 0, '本地那份应当被镜像写过，否则它会一直是旧的');
+    });
+    ok('开程序选了「取云端的」→ 不拿本机那份去覆盖云端', () => {
+      assert.strictEqual(r.c.srv.剧本.请求.some(x => x.startsWith('PUT /api/tree')), false);
+    });
+  }
+  {
+    const r = 跑起手(本机树(), null);
+    await 等一下(5);
+    点冲突('mine');
+    const 结果 = await r.p;
+    ok('开程序选了「用我的覆盖」→ 用本机那份，并把它传上云端', () => {
+      assert.strictEqual(结果.name, '本机补完的树', '本机那份不该被换掉');
+      assert(r.c.srv.剧本.请求.some(x => x.startsWith('PUT /api/tree')), '应当把它传上云端');
+    });
+  }
+  {
+    const 同 = { name: '云端的树', leaves: [{ name: '概述', desc: '云' }], children: [] };
+    const r = 跑起手(同, null);
+    const 结果 = await r.p;
+    ok('开程序：两边一模一样时不弹窗、直接用', () => {
+      const m = r.c.env.els.cloudConflict;      // 没弹窗时这个元素压根没建，所以是 undefined
+      assert(!m || !m.classList.contains('show'), '两边一样就不该弹窗');
+      assert.strictEqual(结果.name, '云端的树');
+    });
   }
 
   console.log(`\n结果：通过 ${通过}，失败 ${失败}`);
