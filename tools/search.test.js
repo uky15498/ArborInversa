@@ -79,10 +79,17 @@ ok('空查询、只有排除词的查询都返回空结果', () => {
 });
 
 console.log('二、检索范围与字段语法');
-ok('搜索单位 ＝ 122 枝 + 142 叶', () => {
+// ★ 这里原来写死「122 枝 + 142 叶」—— 那只是当时的**内容快照**，
+//   内容一长（2026-09-22 补完明／清／近现代后到 228 + 248）它就报假失败，
+//   逼着人每加一批内容就来改测试数字，反而容易把真 bug 一起改掉。
+//   现在**从夹具现算**：断言的是「searchUnits 把每个枝、每片叶都枚举到」这条不变量，
+//   跟内容多少无关，漏枝漏叶照样抓得住。
+const 夹具枝数 = (() => { let n = 0; (function w(x) { n++; (x.children || []).forEach(w); })(data); return n; })();
+const 夹具叶数 = (() => { let n = 0; (function w(x) { n += (x.leaves || []).length; (x.children || []).forEach(w); })(data); return n; })();
+ok(`搜索单位 ＝ ${夹具枝数} 枝 + ${夹具叶数} 叶`, () => {
   const u = S.searchUnits();
-  assert.strictEqual(u.length, 122 + 142);
-  assert.strictEqual(u.filter(x => x.leaf).length, 142);
+  assert.strictEqual(u.length, 夹具枝数 + 夹具叶数);
+  assert.strictEqual(u.filter(x => x.leaf).length, 夹具叶数);
 });
 ok('普通词能命中枝名', () => {
   const h = S.runSearch('南宋');
