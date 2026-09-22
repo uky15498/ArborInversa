@@ -32,6 +32,15 @@ function loadCloud() {
   return lines.slice(begin, end + 1).join('\n');
 }
 
+// ★ 冲突弹窗（#cloudConflict）在真机上要等用户点按钮；测试里没人点，
+//   所以给它装一个「自动应答」：用例先设好 冲突答复，弹窗一挂上 onclick 就替用户点。
+let 冲突答复 = 'theirs';
+// ★ 沙箱把 setTimeout 换成了空函数（防抖不该真跑），所以等待要用**真的**定时器
+const 等一下 = (ms = 0) => new Promise(r => require('timers').setTimeout(r, ms));
+// 弹窗上挂着的那两个 handler —— 记下来，用例可以事后替用户点
+const 待点 = { mine: null, theirs: null };
+const 点冲突 = (哪个) => { const h = 待点[哪个]; assert(h, '冲突弹窗上还没有「' + 哪个 + '」的按钮'); h(); };
+
 // ── 2) 假的浏览器环境（够云端那段用就行）────────────────────────────────
 function 造环境() {
   const BTN = [];
@@ -49,8 +58,25 @@ function 造环境() {
     fire(t) { (this._h[t] || []).forEach(f => f()); },
     querySelectorAll() { return BTN; },
   });
+  // 冲突弹窗那两个按钮：onclick 一被挂上，就按 冲突答复 替用户点（★ 必须放在 El 之后）
+  function 造冲突元素(id) {
+    const e = El(id); let h = null;
+    Object.defineProperty(e, 'onclick', {
+      get() { return h; },
+      set(f) {
+        h = f;
+        待点[id === 'ccMine' ? 'mine' : 'theirs'] = f;
+        const 该我 = (id === 'ccMine' && 冲突答复 === 'mine') || (id === 'ccTheirs' && 冲突答复 === 'theirs');
+        if (该我) queueMicrotask(() => { if (h) h(); });
+      },
+    });
+    return e;
+  }
   const document = {
-    getElementById(id) { return els[id] = els[id] || El(id); },
+    getElementById(id) {
+      if (id === 'ccMine' || id === 'ccTheirs') return els[id] = els[id] || 造冲突元素(id);
+      return els[id] = els[id] || El(id);
+    },
     querySelector(sel) {
       const m = sel.match(/#cloudParts button(?:\.(cand|on))?/);
       if (!m) return null;
@@ -152,7 +178,9 @@ function 起云() {
   g.toast = m => TOASTS.push(m);
   g.render = () => {}; g.navReset = () => {};
   g.leavesOf = t => (t && t.leaves) || [];
-  g.Store = { load: async () => ({ name: '本地树', leaves: [], children: [] }), save: async () => {} };
+  const 本地写盘 = [];
+  g.Store = { load: async () => ({ name: '本地树', leaves: [], children: [] }),
+              save: async (d) => { 本地写盘.push(d); } };
   g.DATA = { name: '本机那份', leaves: [{ name: 'a', desc: 'x' }], children: [] };
   g.curPath = []; g.curLeaf = 0;
 
@@ -173,7 +201,7 @@ function 起云() {
     env.document.getElementById('cloudName').value = 名;
     env.document.getElementById('cloudPass').value = 令;
   };
-  return { api, env, srv, TOASTS, 复原, 高亮, 有主, 点, 填 };
+  return { api, env, srv, TOASTS, 复原, 高亮, 有主, 点, 填, 本地写盘 };
 }
 
 // ── 5) 断言 ──────────────────────────────────────────────────────────────
@@ -288,7 +316,11 @@ const 不含 = (s, 片段) => assert(!String(s).includes(片段), `不该出现�
         assert.strictEqual(c.api.Cloud.on(), true, 'toast: ' + c.TOASTS.join(' | '));
         assert.strictEqual(c.api.Cloud.用户名, 'Urgestalt');
         assert.strictEqual(c.api.Cloud.分区, '流');
-        assert(c.TOASTS.join(' | ').includes('已从云端取回'), '实际：' + c.TOASTS.join(' | '));
+        const 话 = c.TOASTS.join(' | ');
+        // ★ 手上那份与云端不一样时，现在会先弹冲突窗问一句；无论选哪边，
+        //   都不该出现「没成」这种把成功说成失败的话
+        assert(话.includes('云端'), '应当说明树取自云端，实际：' + 话);
+        assert(!话.includes('没成'), '不该说「没成」——登录是成功的，实际：' + 话);
       });
       ok('登录成功后密码框被清空（别把口令留在界面上）', () => {
         assert.strictEqual(c.env.els.cloudPass.value, '');
@@ -344,6 +376,64 @@ const 不含 = (s, 片段) => assert(!String(s).includes(片段), `不该出现�
         assert(段.includes('if(e.状态!==409'), '应当只对 409 做候选重试');
       });
     } finally { c.复原(); }
+  }
+
+  // ── ★ 用户实际踩的坑：登录时「旧树自动覆盖了新树」 ──
+  //    以前 登录之后() 里是「云端非空 → 直接 DATA=t.tree」，手上的树看都不看就没了。
+  {
+    const c = 起云();
+    try {
+      冲突答复 = null;                                   // 不自动应答 → 应当**卡在弹窗上**等人选
+      await c.api.查名字并画('Urgestalt', 'login');
+      c.点('流'); c.填('Urgestalt', '123223');
+      const p = c.api.云上按('login');
+      await 等一下(5);
+      ok('★ 两边都有树且不一样 → 必须弹窗问，不许默默覆盖', () => {
+        assert.strictEqual(c.env.els.cloudConflict.classList.contains('show'), true,
+          '没弹窗就等于默默把用户的树换掉了');
+      });
+      点冲突('theirs');                                  // 事后替用户点「取云端的」
+      await p;
+      ok('选了「取云端的」→ 换成云端那份，且本地镜像同步更新', () => {
+        assert.strictEqual(globalThis.DATA.name, '逆生树');
+        assert(c.本地写盘.length > 0, '本地那份应当被同步写过（否则它会悄悄过期）');
+        assert.strictEqual(c.本地写盘[c.本地写盘.length - 1].name, '逆生树');
+      });
+    } finally { 冲突答复 = 'theirs'; c.复原(); }
+  }
+  {
+    const c = 起云();
+    try {
+      冲突答复 = 'mine';                                 // 替用户点「用我的覆盖」
+      await c.api.查名字并画('Urgestalt', 'login');
+      c.点('流'); c.填('Urgestalt', '123223');
+      c.TOASTS.length = 0;
+      await c.api.云上按('login');
+      ok('选了「用我的覆盖」→ 手上的树不被换掉，并上传云端', () => {
+        assert.strictEqual(globalThis.DATA.name, '本机那份', '手上的树不该被换掉');
+        assert(c.srv.剧本.请求.some(x => x.startsWith('PUT /api/tree')), '应当把它传上云端');
+      });
+    } finally { 冲突答复 = 'theirs'; c.复原(); }
+  }
+  {
+    const c = 起云();
+    try {
+      冲突答复 = 'theirs';
+      await c.api.查名字并画('Urgestalt', 'login');
+      c.点('流'); c.填('Urgestalt', '123223');
+      // 把手上这份换成与云端**逐字节相同**的树，再登录
+      globalThis.DATA = { name: '逆生树', leaves: [{ name: '概述', desc: '逆生树…' }], children: [] };
+      c.TOASTS.length = 0;
+      await c.api.云上按('login');
+      const 话 = c.TOASTS.join(' | ');
+      ok('两边一模一样时不打扰用户（不弹冲突窗，也不白问一遍）', () => {
+        assert(话.includes('一模一样'), '实际：' + 话);
+        assert(!话.includes('没成'), '实际：' + 话);
+      });
+      ok('两边一样时不做多余的写盘', () => {
+        assert.strictEqual(c.本地写盘.length, 0, '一样就不该再写一遍本地');
+      });
+    } finally { 冲突答复 = 'theirs'; c.复原(); }
   }
 
   console.log(`\n结果：通过 ${通过}，失败 ${失败}`);

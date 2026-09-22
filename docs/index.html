@@ -2199,15 +2199,16 @@ async function save(){
     try{
       const r=await Cloud.存树(DATA);
       记云端信息({版本:r.版本, 改于:r.改于});
+      await 顺手存本地(DATA);                        // ★ 本地那份同步跟上，别让它过期
       return true;
     }catch(e){
       if(e.状态===409){
         const 取=await 云端冲突(e.回话);
         if(取==="mine"){
-          try{ const r=await Cloud.存树(DATA,true); 记云端信息({版本:r.版本,改于:r.改于}); toast("已用你这边的覆盖云端"); return true; }
+          try{ const r=await Cloud.存树(DATA,true); 记云端信息({版本:r.版本,改于:r.改于}); await 顺手存本地(DATA); toast("已用你这边的覆盖云端"); return true; }
           catch(e2){ toast("还是没存上："+e2.message); return false; }
         }
-        try{ const t=await Cloud.取树(); DATA=t.tree; curPath=[]; curLeaf=0; render(); navReset([]); 记云端信息(t); toast("已换成云端那份"); return true; }
+        try{ const t=await Cloud.取树(); DATA=t.tree; curPath=[]; curLeaf=0; render(); navReset([]); 记云端信息(t); await 顺手存本地(DATA); toast("已换成云端那份"); return true; }
         catch(e2){ toast("取不回来："+e2.message); return false; }
       }
       Cloud.未上传=true; Cloud.离网=true; 刷云端界面();
@@ -2362,6 +2363,20 @@ const Cloud={
   收下(d){ this.令牌=d.token; this.用户名=d.name; this.分区=d.part; this.版本=""; this.未上传=false; this.离网=false; this.记住(); },
 };
 
+// ---- 登录之后，本地那份也要跟着写 ----
+// ★ 为什么非要有这个：save() 一旦走云端，就再也不动本地 data.json 了，
+//   而 README／说明里写着「内容正本在应用目录的 data.json」——
+//   于是照文档去改本地文件的人（包括写这个功能的我）会拿着一份**过期骨架**干活，
+//   一登录就被云端顶掉，看着像白干。让本地永远是当前树的镜像，这个坑就不存在了。
+// ★ 便携版（window.ArborStore）例外：它的「本地」就是那个 HTML 自己，
+//   每次 load/save 都重写会把页面越撑越大，所以它不同步。
+//   ★ typeof 判一句是为了自测能在没有 window 的沙箱里跑这段真实代码。
+const 本地随云端 = !(typeof window!=="undefined" && window.ArborStore);
+async function 顺手存本地(树){
+  if(!本地随云端 || !树) return;
+  try{ await Store.save(树); }catch(e){ /* 镜像失败不该打断正事 */ }
+}
+
 // ---- 云面板：顶栏那颗按钮 ＋ 弹窗 ----
 function 云地址(){
   const a=String(Cloud.地址||"").replace(/\/+$/,"");
@@ -2469,7 +2484,17 @@ async function 云上按(动作){
     if(动作==="reg" && !confirm("注册新账号：「"+名+"」进「"+区+"」区。\n口令忘了找不回来（服务器只存哈希），记牢。确定吗？")) return;
     const d = 动作==="reg" ? await Cloud.注册(名,令,区)
                            : (区 ? await Cloud.登录(名,令,区) : await 云登录认人(名,令));
-    await 登录之后(d);
+    // ★ 走到这儿**登录本身已经成了**（令牌已存、顶栏已是 ●用户名）。
+    //   后面「取树／存树」再出问题，绝不能报成「没成」——那会让人以为白登了一场，
+    //   而账号其实是好的（用户实际踩过：登录成功却提示失败）。
+    try{ await 登录之后(d); }
+    catch(e2){
+      刷云端界面();
+      document.getElementById("cloudModal").classList.remove("show");
+      toast("账号已经登上了（"+Cloud.用户名+"），只是同步这棵树没成："+e2.message
+            +"　改动还在，回头点面板里的「把这棵树传上去」");
+      return;
+    }
   }catch(e){
     const 回话=e.回话||{};
     const 占=回话.候选||回话.占用;                     // 登录给「候选」，注册撞名给「占用」
@@ -2503,16 +2528,42 @@ async function 云上按(动作){
 async function 登录之后(d){
   document.getElementById("cloudPass").value="";
   记云端信息(d);
-  const t=await Cloud.取树();
+  let t;
+  try{ t=await Cloud.取树(); }
+  catch(e){
+    // ★ 云端还没有这棵树（404）不算错 —— 当成空的，下面会问要不要把手上这份传上去。
+    //   以前这里直接把 404 抛出去，于是「登录成功」却弹一句失败提示。
+    if(e.状态!==404) throw e;
+    t={tree:{name:(DATA&&DATA.name)||"逆生树",leaves:[],children:[]}, 版本:null, 改于:null};
+  }
   const 云端空=!t.tree.leaves.length && !t.tree.children.length;
   const 手上有=!!(DATA && (leavesOf(DATA).length || (DATA.children||[]).length));
-  if(云端空 && 手上有 && confirm("云端这个账号还是空的。\n把现在打开的这棵树（「"+DATA.name+"」）传上去吗？")){
-    await Cloud.存树(DATA,true);
-    toast("已把「"+DATA.name+"」传上云端");
-  }else if(!云端空){
+  if(云端空){
+    if(手上有 && confirm("云端这个账号还是空的。\n把现在打开的这棵树（「"+DATA.name+"」）传上去吗？")){
+      await Cloud.存树(DATA,true);
+      toast("已把「"+DATA.name+"」传上云端");
+    }
+  }else if(!手上有){
     DATA=t.tree; curPath=[]; curLeaf=0; render();
     navReset([]);
+    await 顺手存本地(DATA);                          // ★ 本地那份跟上
     toast("已从云端取回「"+DATA.name+"」");
+  }else if(JSON.stringify(t.tree)===JSON.stringify(DATA)){
+    toast("云端那份和你手上这份一模一样，没动它");
+  }else{
+    // ★★ 两边都有树、内容却不一样 —— **绝不能默默拿云端那份盖掉手上的**。
+    //    用户实际踩过：本地刚补完一批内容，一登录就被云端的旧树顶掉，看着像白干了。
+    //    这里改用保存冲突那套弹窗，让用户自己挑留哪份。★
+    const 取=await 云端冲突({远端版本:t.版本, 远端改于:t.改于});
+    if(取==="mine"){
+      await Cloud.存树(DATA,true);
+      toast("已用你手上这份覆盖云端");
+    }else{
+      DATA=t.tree; curPath=[]; curLeaf=0; render();
+      navReset([]);
+      await 顺手存本地(DATA);                        // ★ 选了云端 → 本地也更新，不留旧的
+      toast("已换成云端那份");
+    }
   }
   const me=await Cloud.我的().catch(()=>null);
   if(me) 记云端信息(me);
@@ -2617,11 +2668,36 @@ function 收用户条(){ const e=document.getElementById("cloudPop"); if(e) e.re
 })();
 
 // ---- 初始化 ----
-const 起手 = Cloud.on()
-  ? Cloud.取树().then(t=>{ 记云端信息(t); return t.tree; })
-      .catch(e=>{ Cloud.离网=true; Cloud.未上传=true; 刷云端界面();
-                  toast("连不上云端（"+e.message+"）—— 先用本地那份，改动回头传上去"); return Store.load(); })
-  : Store.load();
+// ★ 开程序时如果已经登录着，以前是**直接拿云端那棵树**当数据（本地那份看都不看）。
+//   本地被人从外面改过（比如照文档改 data.json）时，那一改就悄悄没了 —— 用户实际踩过。
+//   现在：两边都有树、又不一样，就弹窗问留哪份；一样才直接用。★
+const 起手 = (async () => {
+  const 本地 = await Store.load();
+  if(!Cloud.on()) return 本地;
+  let t;
+  try{
+    t = await Cloud.取树();
+  }catch(e){
+    Cloud.离网=true; Cloud.未上传=true; 刷云端界面();
+    toast("连不上云端（"+e.message+"）—— 先用本地那份，改动回头传上去");
+    return 本地;
+  }
+  记云端信息(t);
+  const 本地非空=!!((本地.leaves||[]).length || (本地.children||[]).length);
+  const 云端非空=!!(t.tree.leaves.length || t.tree.children.length);
+  if(云端非空 && 本地非空 && JSON.stringify(本地)!==JSON.stringify(t.tree)){
+    const 取=await 云端冲突({远端版本:t.版本, 远端改于:t.改于});
+    if(取==="mine"){
+      try{ await Cloud.存树(本地,true); toast("已用本机这份覆盖云端"); }
+      catch(e){ toast("没传上去："+e.message); }
+      return 本地;
+    }
+    await 顺手存本地(t.tree);                        // 选了云端 → 本地也跟着更新，不再留一份旧的
+    return t.tree;
+  }
+  if(云端非空){ await 顺手存本地(t.tree); return t.tree; }
+  return 本地;
+})();
 起手.then(d=>{
   DATA=d;
   hist=JSON.parse(localStorage.getItem(LS_KEY)||"[]");
