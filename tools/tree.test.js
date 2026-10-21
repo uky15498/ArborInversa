@@ -60,7 +60,8 @@ const engine = new Function('DATA', loadPure() +
   '\nreturn {sTokens,searchUnits,runSearch,runQuery,runRows,rowsToTokens,condSyntax,findPathsByName,inPath,isBranchConst,esc,' +
   'IMG_TABLE,IMG_LEN,IMG_EXTS,isImgValue,imgValueFromHash,isMobileUA,isMobileUI,uiOverrideOf};');
 
-const { treeToCode, codeToTree } = loadCodec();
+const api = loadCodec();
+const { treeToCode, codeToTree } = api;
 
 // ── 2) 读夹具 ──────────────────────────────────────────────
 const text = fs.readFileSync(FIXTURE, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
@@ -180,10 +181,41 @@ ok('二次往返是固定点（再来一轮不再变化）', () => {
   const once = treeToCode(ROOT);
   assert.strictEqual(treeToCode(codeToTree(once).children[0]), once);
 });
-ok('导出的代码以「枝 名称」开头，子枝缩进一层', () => {
+ok('导出的代码以「枝 名称」开头，下枝带干支层级', () => {
   const lines = treeToCode(ROOT).split('\n');
   assert.strictEqual(lines[0], '枝 ' + ROOT.name);
-  if (ROOT.children.length) assert.ok(lines.some(l => l.startsWith('  枝 ')), '子枝应缩进一层');
+  if (ROOT.children.length)
+    assert.ok(lines.some(l => /^甲子 枝 /.test(l)), '第 1 层的枝应写成「甲子 枝 …」');
+});
+ok('干支层级：甲子→乙丑…癸亥 不循环，第 61 层不存在', () => {
+  assert.strictEqual(api.ganzhiOf(1), '甲子');
+  assert.strictEqual(api.ganzhiOf(2), '乙丑');
+  assert.strictEqual(api.ganzhiOf(11), '甲戌');
+  assert.strictEqual(api.ganzhiOf(60), '癸亥');
+  assert.strictEqual(api.ganzhiOf(61), null);
+});
+ok('三种写法（干支／数字／破折号／纯空格）解析出同一棵树', () => {
+  const gz = treeToCode(ROOT);
+  const num = gz.split('\n').map(l => {
+    const m = /^([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]) (.*)$/.exec(l);
+    return m ? (api.codeLevelOf(l).lvl + ' ' + m[2]) : l;
+  }).join('\n');
+  const dash = gz.split('\n').map(l => {
+    const m = /^([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]) (.*)$/.exec(l);
+    return m ? ('－'.repeat(api.codeLevelOf(l).lvl) + m[2]) : l;
+  }).join('\n');
+  const a = JSON.stringify(codeToTree(gz).children);
+  assert.strictEqual(JSON.stringify(codeToTree(num).children), a, '数字版应与干支版一致');
+  assert.strictEqual(JSON.stringify(codeToTree(dash).children), a, '破折号版应与干支版一致');
+});
+ok('结构行写数字会自动换成干支（正文里的一律不动）', () => {
+  const r = api.codeNormalizeLevels('3 枝 浙派\n12 叶 概述\n正文里 3 枝 别动');
+  assert.strictEqual(r.changed, 2);
+  assert.strictEqual(r.text, '丙寅 枝 浙派\n乙亥 叶 概述\n正文里 3 枝 别动');
+});
+ok('正文行不写层级，仍归到上面那片叶', () => {
+  const t = codeToTree('枝 甲\n甲子 叶 概述\n  第一行\n  第二行\n');
+  assert.strictEqual(t.children[0].leaves[0].desc, '第一行\n第二行');
 });
 ok('搜索单位数 ＝ 枝数 ＋ 叶数', () => {
   const u = S.searchUnits();

@@ -35,7 +35,7 @@ function loadPure(htmlPath) {
 }
 
 function loadCodec(htmlPath) {
-  return new Function(loadPure(htmlPath) + '\nreturn {leavesOf, treeToCode, codeToTree};')();
+  return new Function(loadPure(htmlPath) + '\nreturn {leavesOf, treeToCode, codeToTree, ganzhiOf, codeLevelOf, codeLevelNum, codeNormalizeLevels};')();
 }
 
 module.exports = { loadPure, loadCodec };

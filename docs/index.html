@@ -483,13 +483,14 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
       <a id="plantAiBtn">告诉 ai 怎么帮你写</a>
     </div>
     <div class="shelp" id="plantHelp" style="display:none">
-      <b>每行一条语句，缩进表示层级</b>（2 个空格／1 个 Tab／1 个全角空格都行）：<br>
+      <b>层级用六十甲子</b>：<code>甲子</code> 是第 1 层、<code>乙丑</code> 第 2 层……<code>癸亥</code> 第 60 层
+      （按六十甲子原序，不循环）。写阿拉伯数字、中文数字、破折号也行，程序都认；<br>
       <code>树 名称</code> 整棵树的标题（只认最上面一行，可省）<br>
       <code>枝 名称</code> 一根枝　<code>叶 名称</code> 一片叶（一枝可多片）<br>
-      <code>属性 键: 值</code> 该枝的属性；写在枝行下方、与叶行同级；值用逗号分隔即为多个<br>
-      <b>叶的内容</b>＝紧跟其后、缩进比它更深的所有行（共同缩进会被剥掉）<br>
+      <code>属性 键: 值</code> 该枝的属性；值用逗号分隔即为多个<br>
+      <b>结构行顶格写</b>「层级字 + 空格 + 枝/叶/属性」；<b>正文不用写层级</b>，跟着上一片叶走<br>
       叶正文里可用 <code>[[枝名]]</code> 生成跳转、<code>![[图片名]]</code> 插图<br>
-      更深的缩进一律算内容，所以叶正文里写「枝 某某」也不会被误当结构
+      老的空格缩进格式仍然能导入（程序自己认）
     </div>
     <div class="shelp aihelp" id="plantAi" style="display:none">
       <div class="aihead">把下面整段复制，发给任意 ai（对话框里粘贴即可），它就能读懂这套树语言并替你写代码：
@@ -1101,35 +1102,110 @@ function codeStripIndent(line,cols){
   }
   return line.slice(i);
 }
+// ---- 层级：六十甲子 ----
+// 为什么用干支：缩进靠数空格，写到八层就是十六个空格，人和 AI 都容易多一个少一个；
+// 干支是**两个字、一词一层**，宽度固定、顺序天然（丙寅后面想写乙丑自己会觉得不对），
+// 而且「甲子 枝 X」这种行首几乎不会在正文里撞上。
+// 六十甲子按原序（甲子、乙丑…癸亥），**不循环**：第 60 层是癸亥，第 61 层直接判错。
+const GAN="甲乙丙丁戊己庚辛壬癸";
+const ZHI="子丑寅卯辰巳午未申酉戌亥";
+const GANZHI_MAX=60;
+function ganzhiOf(n){                       // 1 → 甲子，2 → 乙丑 … 60 → 癸亥
+  if(!(n>=1 && n<=GANZHI_MAX)) return null;
+  const i=n-1;
+  return GAN.charAt(i%10)+ZHI.charAt(i%12);
+}
+const GANZHI_INDEX=(function(){
+  const m=new Map();
+  for(let n=1;n<=GANZHI_MAX;n++) m.set(ganzhiOf(n), n);
+  return m;
+})();
+const CN_DIGITS={"零":0,"〇":0,"一":1,"二":2,"两":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9};
+// 纯数字（阿拉伯／中文）→ 层号；认 3、03、十一、一十一、二十、十二
+function codeLevelNum(txt){
+  const t=String(txt==null?"":txt).trim();
+  if(/^\d+$/.test(t)) return parseInt(t,10);
+  if(!/^[零〇一二两三四五六七八九十]+$/.test(t)) return null;
+  const 十=t.indexOf("十");
+  if(十<0){                                  // 一到九（含「两」）
+    let v=0;
+    for(const ch of t){ const d=CN_DIGITS[ch]; if(d==null) return null; v=v*10+d; }
+    return v;
+  }
+  const head=t.slice(0,十), tail=t.slice(十+1);
+  const a=head? Number(CN_DIGITS[head]) : 1;           // 「十一」＝ 一十一
+  if(a==null) return null;
+  const b=tail? Number(CN_DIGITS[tail]) : 0;
+  if(b==null) return null;
+  return a*10+b;
+}
+// 行首的层级标记：{lvl, text, rest} —— 认干支、阿拉伯数字、中文数字、破折号（－/—/─）
+// 破折号按**字长短**算层级（只写一个也当一层），空格缩进则返回 null（走老的缩进解析）
+function codeLevelOf(line){
+  const m=/^([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]|[\d]+|[零〇一二两三四五六七八九十]+)/.exec(line||"");
+  if(m && /^[ \t\u3000]/.test((line||"").slice(m[0].length))){
+    const word=m[0];
+    let lvl=GANZHI_INDEX.get(word);
+    if(lvl==null) lvl=codeLevelNum(word);
+    if(lvl!=null) return {lvl:lvl, text:word, rest:String(line).slice(m[0].length)};
+  }
+  const d=/^[－—─]+/.exec(line||"");
+  if(d) return {lvl:d[0].length, text:d[0], rest:String(line).slice(d[0].length)};
+  return null;
+}
+const GANZHI_CACHE_MAX=GANZHI_MAX;
 // 枝（连它下面的所有枝与叶）→ 文本代码
 // 相对层级：根在 0 层，下枝从 1 层起（编辑预览里给用户看的版本，不带整棵树的缩进）
-function treeToCodeRel(node){ return treeToCode(node,1); }
+function treeToCodeRel(node){ return treeToCode(node,1); }   // 相对层级：这一根写「甲子」，它的下枝「乙丑」
+// 导出：结构行写「干支 空格 关键字」，正文不写层级（归最近那片叶）。
+// 仍用 2 个空格的缩进来做「正文」的视觉归属 —— 那只是给人看的，解析靠干支。
+// 约定：调用方传进来的 depth 就是这根枝的层号（根的层号是 1 → 写「甲子」；
+// 导出整棵树时传 1，于是根写「甲子」，它的下枝写「乙丑」，与「树 X」下面的层级对得上）。
 function treeToCode(node,depth){
-  const pad=CODE_UNIT.repeat(depth||0);
-  let out=pad+"枝 "+(node.name||"未名枝")+"\n";
-  out+=propsToCodeLines(node,pad+CODE_UNIT);
+  const lv=(depth||0);
+  const pad=CODE_UNIT.repeat(lv);
+  // 层号 1 = 甲子、2 = 乙丑 …（根自己算 0 层，不写）
+  const mark=(k)=>{
+    const gz=ganzhiOf(k);
+    return gz? gz+" " : " ".repeat(CODE_UNIT.length*k);
+  };
+  let out=mark(lv)+"枝 "+(node.name||"未名枝")+"\n";
+  out+=propsToCodeLines(node,mark(lv+1));
   for(const lf of leavesOf(node)){
-    out+=pad+CODE_UNIT+"叶 "+(lf.name||"叶")+"\n";
+    out+=mark(lv+1)+"叶 "+(lf.name||"叶")+"\n";
     const lines=String(lf.desc==null?"":lf.desc).split("\n");
     while(lines.length && !lines[lines.length-1].trim()) lines.pop();   // 尾部空行不入码
     for(const ln of lines) out+=(ln.trim()? pad+CODE_UNIT+CODE_UNIT+ln : "")+"\n";
     out+="\n";
   }
-  for(const c of (node.children||[])) out+=treeToCode(c,(depth||0)+1);
+  for(const c of (node.children||[])) out+=treeToCode(c,lv+1);
   return out;
 }
 // 文本代码 → {title, leaves, children}；出错抛 SyntaxError（带行号）
+// 三套层级写法都认：干支／数字（阿拉伯、中文）、破折号、纯空格缩进。
+// 规则：结构行只要带了层级标记，就按标记算层；**没带的**才按缩进算 —— 所以老的代码照旧能导。
 function codeToTree(text){
   const toks=String(text==null?"":text).replace(/^\uFEFF/,"").replace(/\r\n?/g,"\n").split("\n")
-    .map((s,i)=>({n:i+1,s:s,ind:codeIndentOf(s),t:s.trim()}));
+    .map((s,i)=>{
+      const lv=codeLevelOf(s);
+      const body=lv? lv.rest : s;
+      return {n:i+1, s:s, ind:lv? lv.lvl : codeIndentOf(s), lv:lv? lv.lvl : null, t:body.trim(), raw:s.trim()};
+    });
   let p=0;
   const bad=(tok,msg)=>{ throw new SyntaxError("第 "+tok.n+" 行："+msg); };
-  function collectContent(leafInd){
+  function collectContent(leafInd, useLevel){
     const buf=[];
     while(p<toks.length){
       const L=toks[p];
       if(!L.t){ buf.push(""); p++; continue; }
-      if(L.ind<=leafInd) break;
+      const isStruct=!!codeStatementOf(L.t) || /^(正文|内容)$/.test(L.t);
+      if(useLevel){                                  // 干支／数字版：靠「有没有层级标记」分家
+        if(L.lv!=null && L.t && (isStruct || L.lv<=leafInd)) break;
+        if(L.lv!=null && !isStruct && L.lv>leafInd){ buf.push(L.s); p++; continue; }  // 带标记的正文（少见）
+        if(L.lv==null){ buf.push(L.s); p++; continue; }                              // 不写标记的正文：正文行
+        break;
+      }
+      if(L.ind<=leafInd) break;                      // 老的空格缩进版
       buf.push(L.s); p++;
     }
     while(buf.length && !buf[buf.length-1].trim()) buf.pop();
@@ -1137,41 +1213,98 @@ function codeToTree(text){
     const base=ins.length?Math.min.apply(null,ins):0;
     return buf.map(x=>x.trim()? codeStripIndent(x,base) : "").join("\n");
   }
-  function parseBlock(minInd){
+  // 解析一块结构。**收谁的**只有一条规矩：
+  //   比 startLv 浅的 → 交回上层（它是别人的兄弟），比 startLv 深或等于的 → 都是这一块的内容。
+  // startLv 由调用方给：顶层＝1（干支第 1 层）、某个枝的内容＝枝层级+1。
+  // 所以「甲子 枝 X」下面是「乙丑 …」；再见到「甲子 枝 Y」时 1<2 → 交回去，成为 X 的兄弟。
+  function parseBlock(startLv, useLevel){
     const leaves=[], children=[], props={};
+    let curBranch=null;                          // 同层的属性／叶挂到它名下
+    const attachTo=(node,L)=>{
+      const st=codeStatementOf(L.t);
+      if(st.kind==="prop"){
+        const pr=codePropOf(st.name); if(!pr) bad(L,"属性要写成「属性 键: 值」");
+        if(!node.props) node.props={};
+        node.props[pr.k]=pr.v;
+      }else{
+        // 同层叶的正文：比叶更深的行都算它的（正文行通常不写层级标记）
+        const lvL=(L.lv==null? L.ind : L.lv);
+        if(!node.leaves) node.leaves=[];
+        node.leaves.push({name:st.name, desc:collectContent(lvL, useLevel)});
+      };
+    };
     while(p<toks.length){
       const L=toks[p];
       if(!L.t){ p++; continue; }
-      if(L.ind<=minInd) break;
+      if(useLevel){
+        if(L.lv==null && !codeStatementOf(L.t)) break;   // 没标记又不是结构 → 正文，交回上层
+        if(L.lv!=null && L.lv<startLv) break;            // 比我起点浅 → 交回去当兄弟
+        // 同层的「属性」「叶」归**上面最近那根枝**（也就是本块刚收的那根），不开新块
+        if(L.lv!=null && L.lv===startLv && children.length && curBranch &&
+           /^(属性|叶)[\s\u3000]/.test(L.t)){
+          // ★ 先 p++ 再交给 attachTo：叶的正文要**从下一行**开始收，否则正文被自己吃掉
+          p++; attachTo(curBranch,L); continue;
+        }
+      }else if(L.ind<=startLv) break;                    // 老的空格缩进版：按缩进比
       const st=codeStatementOf(L.t);
-      if(!st) bad(L,"只能以「树 名称」「枝 名称」「叶 名称」「属性 键: 值」开头（叶的内容要缩进更深一列）");
+      if(!st) bad(L,"只能以「树 名称」「枝 名称」「叶 名称」「属性 键: 值」开头（正文要跟在「叶」后面）");
       p++;
       if(st.kind==="prop"){
         const pr=codePropOf(st.name);
         if(!pr) bad(L,"属性要写成「属性 键: 值」");
         props[pr.k]=pr.v;
       }else if(st.kind==="leaf"){
-        leaves.push({name:st.name, desc:collectContent(L.ind)});
+        const lvL=(L.lv==null? L.ind : L.lv);
+        leaves.push({name:st.name, desc:collectContent(lvL, useLevel)});
       }else{                                  // 枝（以及除首行外出现的「树」）
-        const sub=parseBlock(L.ind);
+        const lvL=(L.lv==null? L.ind : L.lv);
+        // 子块的起点＝下一层；与枝同层的下一行会因 lv<起点 而交回本块，成为兄弟
+        const sub=parseBlock(useLevel? (lvL+1) : lvL, useLevel);
         const child={name:st.name, leaves:sub.leaves, children:sub.children};
         if(Object.keys(sub.props).length) child.props=sub.props;
-        children.push(child);
+        children.push(child); curBranch=child;
       }
     }
     return {leaves:leaves, children:children, props:props};
+
   }
   while(p<toks.length && !toks[p].t) p++;
-  let title=null, topInd=-1;
+  // 用了层级标记的，整份都按标记解析；否则沿用老规矩整份按缩进
+  const useLevel=toks.some(x=>x.lv!=null && !!codeStatementOf(x.t));
+  let title=null, topInd=useLevel? 0 : -1;
   if(p<toks.length){
     const st=codeStatementOf(toks[p].t);
-    if(st && st.kind==="tree"){ title=st.name; topInd=toks[p].ind; p++; }
+    if(st && st.kind==="tree"){ title=st.name; topInd=useLevel? (toks[p].lv==null?toks[p].ind:toks[p].lv) : toks[p].ind; p++; }
   }
-  const body=parseBlock(topInd);
+  // 顶层块：干支版的第 1 层是 1，起点要写 1 才收得住它（写 0 也收，但 1<=0 会立刻 break）
+  const body=parseBlock(useLevel? 1 : topInd, useLevel);
   const out={title:title, leaves:body.leaves, children:body.children};
   if(Object.keys(body.props).length) out.props=body.props;
   return out;
 }
+// ---- 输入时的顺手转换：结构行写成数字就换成干支（粘贴不动，正文不动）----
+// 「3 枝 浙派」→「丙寅 枝 浙派」；超过 60 层原样留着，让解析去报错
+function codeNormalizeLevels(text){
+  const lines=String(text==null?"":text).split("\n");
+  let changed=0;
+  const out=lines.map(line=>{
+    const m=/^([\t\u3000 ]*)(\d+|[零〇一二两三四五六七八九十]+)([ \t\u3000]+)(枝\s|叶\s|属性\s|树\s)/.exec(line);
+    if(!m) return line;
+    const lvl=codeLevelNum(m[2]);
+    const gz=ganzhiOf(lvl);
+    if(!gz) return line;                                  // 超过 60 层：不动，交给校验说话
+    changed++;
+    return m[1]+gz+m[3]+m[4]+line.slice(m.index+m[0].length);
+  });
+  return {text:out.join("\n"), changed:changed};
+}
+// 一句提示：这棵树用了多少层、最深的枝在哪
+function codeDepthHint(tree){
+  let max=0;
+  (function w(n,d){ max=Math.max(max,d); (n.children||[]).forEach(c=>w(c,d+1)); })(tree,0);
+  return max;
+}
+
 // ==== 树 ⇄ 文本代码 END ====
 
 // ==== 编辑语言 BEGIN（纯函数，不依赖 DOM；测试见 tools/edit.test.js）====
@@ -2743,51 +2876,57 @@ function openPlant(){
 const AI_GUIDE=[
 "你正在为「ArborInversa（逆生树）」写一棵树的文本代码。请严格按下面的规则输出代码，只输出代码本身，不要解释、不要 Markdown 围栏。",
 "",
-"【一、语句】每行一条，共四种，行首关键字必须是 树／枝／叶／属性 之一：",
+"【一、层级用六十甲子】结构行顶格写「干支 + 空格 + 枝/叶/属性」：",
+"  甲子＝第1层、乙丑＝第2层、丙寅＝第3层……按六十甲子原序排到癸亥＝第60层，不循环。",
+"  层级不能比上一行深超过 1 层（子枝只比父枝深一层）；同层的枝是兄弟。",
+"  正文行不写干支（跟在「叶」后就是那片叶的内容）。",
+"",
+"【二、语句】每行一条，共四种，行首关键字必须是 树／枝／叶／属性 之一：",
 "  树 名称        整棵树的标题，只在最上面写一行，可省略",
 "  枝 名称        一根枝（树节点）",
 "  叶 名称        一片叶（挂在枝上的描述板块；一根枝可以有多片叶）",
 "  属性 键: 值    该枝的属性，写在所属枝（或树）那一行的下方、与叶行同级",
 "",
-"【二、缩进】用缩进表示层级，可用 2 个半角空格／1 个 Tab／1 个全角空格；同一层必须一致。",
-"  · 枝的下级：缩进更深的「枝」是它的下级枝，更深的「叶」是它的叶。",
-"  · 叶的内容：紧跟在「叶」后面、缩进比它更深的所有行，都是这片叶的正文。",
-"  · 更深的缩进一律当内容处理，所以叶正文里出现「枝 某某」这样的行不会被误认成结构。",
-"  · 叶正文的共同缩进会被自动剥掉，正文末尾的空行会被裁掉。",
+"【三、层级与归属】",
+"  · 层级字相同的「枝」是兄弟；比它深一层的是它的下枝。",
+"  · 叶的正文：紧跟在「叶」后面、不写层级字的行，都是这片叶的内容。",
+"  · 正文里如果要顶格写「甲子 枝 某某」这种字样，行首加个 / 当转义。",
+"  · 正文统一缩进 2 格只是给人看的，程序不数它。",
 "",
-"【三、属性】写法 属性 键: 值（冒号半角全角皆可）；值里用逗号分隔表示多个值，会被解析成数组，单个值就是纯文本。",
+"【四、属性】写法 属性 键: 值（冒号半角全角皆可）；值里用逗号分隔表示多个值，会被解析成数组，单个值就是纯文本。",
 "  常用键举例：类型、标签、年代、别名……（属性栏的下拉里有现成的）；键与值都完全自定。不要写空的属性行。",
 "",
-"【四、叶正文里的两种标记】",
+"【五、叶正文里的两种标记】",
 "  [[枝名]]         生成跳转链接（跳到树里同名的那根枝）",
 "  ![[图片文件名]]   插入图片；也可以写成 ![[图片文件名|题注]]",
 "  ![[五言值]]       图片的通用写法：值由图片内容算出（见应用里的「插图」），改名不失效",
 "",
-"【五、排版规范】引号一律用『』；段与段之间空一行；提到树里已有的枝名时写成 [[枝名]]。",
+"【六、排版规范】引号一律用『』；段与段之间空一行；提到树里已有的枝名时写成 [[枝名]]。",
 "  同一层级的枝建议用同一套叶名，读起来更整齐（例如每根分类枝都配一片「概述」，或按自己的习惯固定几片叶）。",
 "",
-"【六、例子】",
+"【七、例子】",
 "树 示例树",
-"  属性 类型: 示例",
-"  叶 概述",
-"    这是一棵示例树，演示这套框架能做什么。",
+"枝 示例树",
+"甲子 属性 类型: 示例",
+"甲子 叶 概述",
+"  这是一棵示例树，演示这套框架能做什么。",
 "",
-"  枝 结构",
-"    属性 类型: 分类",
-"    属性 标签: 枝, 叶",
-"    叶 枝",
-"      竖向的是枝，也就是树的节点。",
-"    叶 叶",
-"      横向的是叶，是挂在枝上的正文；一根枝可以挂多片叶。",
+"甲子 枝 结构",
+"乙丑 属性 类型: 分类",
+"乙丑 属性 标签: 枝, 叶",
+"乙丑 叶 枝",
+"  竖向的是枝，也就是树的节点。",
+"乙丑 叶 叶",
+"  横向的是叶，是挂在枝上的正文；一根枝可以挂多片叶。",
 "",
-"  枝 能力",
-"    属性 标签: 跳转, 插图",
-"    叶 跳转",
-"      正文里写 [[结构]] 就会变成一个可点的链接。",
-"    叶 插图",
-"      ![[尾豏魚賄尾|竖线后面是题注]]",
+"甲子 枝 能力",
+"乙丑 属性 标签: 跳转, 插图",
+"乙丑 叶 跳转",
+"  正文里写 [[结构]] 就会变成一个可点的链接。",
+"乙丑 叶 插图",
+"  ![[尾豏魚賄尾|竖线后面是题注]]",
 "",
-"【七、输出前自检】每一行的关键字是 树／枝／叶／属性 之一；每片叶的正文都比该叶行缩进更深；属性写在所属枝行下方；没有空属性行。",
+"【九、输出前自检】结构行顶格写「干支 + 空格 + 枝/叶/属性」；干支按六十甲子原序、子枝只深一层；正文不写干支；没有空属性行。",
 "",
 "【八、如果你在改一棵树】直接用「生成当前枝的代码」那份当底稿，改完把**全文**交出来即可 ——",
 "  不要只给片段、也不要写「第几行删掉」这种指令：程序会自己比对两份、算出差在哪，再由人勾选落地。",
@@ -2824,6 +2963,17 @@ $("#difSend").onclick=async()=>{
   catch(e){ $("#plantCode").value=got.code; $("#plantCode").select(); try{ document.execCommand("copy"); toast("已复制，粘给 AI 即可"); }catch(e2){ toast("请手动全选复制"); } }
 };
 // 「②」那栏也能从文件读入（跟植入那边一样，只是落点不同）
+// 输入框里结构行写成数字时，失焦就换成干支（粘贴进来的内容不动 —— 老格式要原样留给解析器去认）
+function levelizeOnBlur(ta){
+  ta.addEventListener("blur",()=>{
+    const r=codeNormalizeLevels(ta.value);
+    if(!r.changed) return;
+    ta.value=r.text;
+    toast("已把 "+r.changed+" 行的层级数字换成干支（甲子＝第 1 层）");
+  });
+}
+levelizeOnBlur($("#plantCode"));
+levelizeOnBlur($("#difNew"));
 $("#plantHelpBtn").onclick=()=>{ const e=$("#plantHelp"); e.style.display=(e.style.display==="none"?"":"none"); };
 $("#plantAiBtn").onclick=()=>{
   const e=$("#plantAi");
@@ -3615,39 +3765,39 @@ const 起手 = (async () => {
 </script>
 <script id="tree-data" type="text/plain">
 枝 示例树
-  属性 类型: 示例
-  属性 标签: 框架演示, 入门
-  叶 概述
+甲子 属性 类型: 示例
+甲子 属性 标签: 框架演示, 入门
+甲子 叶 概述
     这是一棵演示框架的示例树：结构、叶、属性、跳转、插图都在里面，随便改、随便删。
     想看真实内容实例（中国美术史），就导随包的《美术史树-试用.txt》。
 
-  枝 结构
-    属性 类型: 分类
-    属性 标签: 枝, 叶, 属性
-    叶 枝
+甲子 枝 结构
+乙丑 属性 类型: 分类
+乙丑 属性 标签: 枝, 叶, 属性
+乙丑 叶 枝
       竖向的是枝，也就是树的节点。枝往下还能继续长枝，构成整棵树的骨架。
 
       ![[示例-结构-枝.svg|枝：竖向往下长，层数不限]]
 
-    叶 叶
+乙丑 叶 叶
       横向的是叶，是挂在枝上的正文。一根枝可以挂多片叶 —— 这根枝上就挂着三片，
       点枝名右侧的叶名就能横向切换。
 
       ![[示例-结构-叶.svg|叶：横向并排，各自一片正文]]
 
-    叶 属性
+乙丑 叶 属性
       枝上还能挂键值对，也就是属性。值用逗号分隔就写成多个：
       比如这枝的「标签」有三个值，「类型」只有一个。
 
       ![[示例-结构-属性.svg|属性：键 → 值，值用逗号分隔即多个]]
 
-  枝 能力
-    属性 类型: 分类
-    属性 标签: 跳转, 插图, 深层
-    叶 跳转
+甲子 枝 能力
+乙丑 属性 类型: 分类
+乙丑 属性 标签: 跳转, 插图, 深层
+乙丑 叶 跳转
       正文里写 [[结构]] 就会变成一个可点的链接，点一下直接跳到那根枝。
 
-    叶 插图
+乙丑 叶 插图
       图片放在 media 文件夹里。正文里写这张图的「值」，竖线后面是题注：
 
       ![[尾豏魚賄尾|根在上、枝向下、叶横挂在枝上]]
@@ -3663,25 +3813,25 @@ const 起手 = (async () => {
 
       ![[東冬江支微|这张故意不存在，用来看占位框]]
 
-    叶 深层
+乙丑 叶 深层
       枝可以一层层往下长，层数不限。
 
-    枝 再深一层
-      属性 类型: 分类
-      叶 还能更深
+乙丑 枝 再深一层
+丙寅 属性 类型: 分类
+丙寅 叶 还能更深
         到了这一层还是枝，下面照样可以继续长。
 
-  枝 用法
-    叶 植树
+甲子 枝 用法
+乙丑 叶 植树
       任何一枝都能整棵转成「文本代码」，再种到别处：点「植树」→「生成当前枝的代码」。
       反过来，把代码粘进「植树」的输入框就能长出新枝。本文件最上面那行「树 示例树」
       就是这棵树的标题行，它下面的内容整体缩进一层。
 
-    叶 搜索
+乙丑 叶 搜索
       右栏切到「搜索」：关键词框 ＋ 限定栏。限定栏不用背语法，点「＋ 条件」按维度加条件，
       多条条件之间可以「并且」「或者」。这棵树带「标签」属性，可以直接试 标签:跳转。
 
-    叶 交给 ai
+乙丑 叶 交给 ai
       「植树」弹窗里有「告诉 ai 怎么帮你写」，点开复制那段说明发给任意 ai，
       它就能按这套写法替你写代码。
 
