@@ -202,11 +202,22 @@
   #plantAiText{width:100%;min-height:200px;max-height:38vh;font-family:ui-monospace,Consolas,monospace;
     font-size:11.5px;line-height:1.62;white-space:pre;overflow:auto;color:#3a342b;background:#fff;}
 
+  /* 植树弹窗的两个模式（植入／改动）—— 分页切换，手机上一页只占一屏 */
+  .pmodes{display:flex;gap:6px;margin:2px 0 10px;}
+  .ptab{border:1px solid #cbc1b2;background:#fff;color:#6b6355;padding:4px 14px;border-radius:14px;font-size:12.5px;}
+  .ptab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  html.is-mobile .ptab{flex:1;min-height:34px;font-size:13px;}
+
   /* 改动（diff → 勾选 → 落地）。参照 GitHub 的 diff 列表：一回事一处，前面一个勾选框 */
-  .diffsec{display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
-  .diffsec.show{display:block;}
-  .difhead{display:flex;align-items:baseline;gap:9px;font-size:12.5px;margin-bottom:7px;}
-  .difhead .diftip{font-size:11px;color:var(--mut);}
+  .difrow0{margin-bottom:11px;}
+  .dlabel{font-size:11.5px;color:#6b6355;font-weight:600;margin-bottom:5px;}
+  .dlabel .dsub{font-weight:400;color:var(--mut);margin-left:7px;}
+  .difscope{max-height:22vh;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fdfbf6;padding:5px 8px;}
+  .dsrow{display:flex;align-items:center;gap:7px;font-size:12px;padding:2px 0;color:#4a443a;}
+  .dsrow .dsize{color:var(--mut);font-size:10.5px;}
+  .dsrow .dsnone{color:#b9ae9a;font-size:10.5px;}
+  .dask{flex:1 1 160px;min-width:120px;font-size:12px;padding:5px 8px;border:1px solid #cbc1b2;border-radius:6px;background:#fff;}
+  .difsay{font-size:11.5px;color:#6b6355;}
   .difacts{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:7px;}
   .difacts .difsay{font-size:11.5px;color:#6b6355;}
   .diflist{max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fdfbf6;}
@@ -223,6 +234,8 @@
   .dl .dux{background:#fdf0ec;color:#7d4330;text-decoration:line-through;}
   .dmore{font-size:11px;color:var(--accent);cursor:pointer;padding:0 9px 6px;}
   html.is-mobile .difrow .dl{font-size:11px;}
+  html.is-mobile .difscope{max-height:26vh;}
+  html.is-mobile .dask{flex:1 1 100%;}
 
   /* ===== 手机版：三栏收成浮层，正文占满屏 =====
      判定见 <head> 里的「手机」纯函数区，结果只落在 <html class="is-mobile"> 这一个类上，
@@ -483,37 +496,62 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
         <button id="plantAiCopy" class="ghost">复制</button></div>
       <textarea id="plantAiText" readonly spellcheck="false"></textarea>
     </div>
-    <label>树的文本代码</label>
-    <textarea id="plantCode" class="code" spellcheck="false" placeholder="把树的文本代码粘到这里，或先点「生成当前枝的代码」"></textarea>
-    <div class="acts">
-      <button id="plantGen">生成当前枝的代码</button>
-      <button id="plantLoad">从文件读取</button>
-      <button id="plantCopy">复制</button>
-      <button id="plantClear">清空</button>
-      <button id="plantCxl">取消</button>
-      <button id="plantOk" class="primary">植树</button>
+    <!-- 两个模式各占一页，切换着看：手机窗口小，别让不用的那页一起抢地方 -->
+    <div class="pmodes" id="plantModes">
+      <button class="ptab on" data-mode="plant">植入</button>
+      <button class="ptab" data-mode="diff">改动</button>
     </div>
 
-    <!-- ★ 改动：粘回改好的全文 → 先看差在哪 → 再落地。
-         为什么不让人手写「删这行、加那行」：AI 大刀阔斧改过之后篇幅与结构都变了，
-         让它逐行写指令既累又易错。这里抄的是 diff → 补丁 → 应用 这条主流路。 -->
-    <div class="diffsec">
-      <div class="difhead">
-        <b>改动</b>
-        <span class="diftip">把上面那栏换成改好的全文，点「比对」，差在哪一目了然。</span>
-      </div>
-      <div class="difacts">
-        <button id="plantDiff">比对</button>
-        <button id="difAll" class="ghost">全选</button>
-        <button id="difNone" class="ghost">全不选</button>
-        <button id="difCount" class="ghost">只改这 0 处</button>
-        <span class="difsay" id="difSay"></span>
-      </div>
-      <div class="diflist" id="difList"></div>
+    <div class="pane-body" id="plantMode">
+      <label>树的文本代码</label>
+      <textarea id="plantCode" class="code" spellcheck="false" placeholder="把树的文本代码粘到这里，或先点「生成当前枝的代码」"></textarea>
       <div class="acts">
-        <button id="difCxl">收起</button>
-        <button id="difOk" class="primary">落地</button>
+        <button id="plantGen">生成当前枝的代码</button>
+        <button id="plantLoad">从文件读取</button>
+        <button id="plantCopy">复制</button>
+        <button id="plantClear">清空</button>
+        <button id="plantCxl">取消</button>
+        <button id="plantOk" class="primary">植树</button>
       </div>
+    </div>
+
+    <!-- ★ 改动：给 AI 原文 → 收回改好的全文 → 程序算差 → 逐条勾选 → 落地。
+         为什么不让 AI 写「删这一行、加那一行」：篇幅与结构一大变，那种指令就全错位了。
+         范围可以只挑一根子枝 —— 站在「中国美术史」上也能只改「元代」，不必整棵倒出来。 -->
+    <div class="pane-body" id="diffMode" style="display:none">
+      <div class="difrow0">
+        <div class="dlabel">改哪一根（只算它自己，不含下枝）</div>
+        <div class="difscope" id="difScope"></div>
+      </div>
+      <div class="difrow0">
+        <div class="dlabel">① 拿原文<span class="dsub" id="difSize"></span></div>
+        <div class="difacts">
+          <button id="difTake">取这份原文</button>
+          <button id="difSend" class="ghost">连同要求一起复制给 AI</button>
+          <input id="difAsk" class="dask" placeholder="想让它怎么改（可留空）"/>
+        </div>
+      </div>
+      <div class="difrow0">
+        <div class="dlabel">② 把 AI 改好的粘回来</div>
+        <textarea id="difNew" class="code" spellcheck="false" placeholder="把 AI 交回来的全文粘到这里"></textarea>
+        <div class="difacts">
+          <button id="plantDiff">比对</button>
+          <button id="difAll" class="ghost">全选</button>
+          <button id="difNone" class="ghost">全不选</button>
+          <button id="difInvert" class="ghost">只改这几处</button>
+          <span class="difsay" id="difSay"></span>
+        </div>
+      </div>
+      <div class="difrow0">
+        <div class="dlabel">③ 收哪些</div>
+        <div class="diflist" id="difList"></div>
+      </div>
+      <div class="acts">
+        <button id="difLoad">从文件读取</button>
+        <button id="difCxl">取消</button>
+        <button id="difOk" class="primary">落地（0 处）</button>
+      </div>
+    </div>
     </div>
   </div>
 </div>
@@ -2477,6 +2515,7 @@ function openPlant(){
   $("#plantVia").textContent="种在："+crumbNamePath(curPath)+"（即当前枝「"+n.name+"」之下）";
   difReset();
   $("#plantModal").classList.add("show");
+  plantModeGo("plant");
   $("#plantCode").focus();
 }
 // 面向 ai 的树语言说明书（原样复制给任意 ai，它就能写这棵树的代码）
@@ -2536,6 +2575,34 @@ const AI_GUIDE=[
 "  · 保持枝名、叶名不变：名字是对齐的依据；要改名的，一次只改一处，别在同一个回复里又改名又搬家"
 ].join("\n");
 
+// ---- 两个模式的切换 ----
+[...document.querySelectorAll("#plantModes .ptab")].forEach(b=>{
+  b.onclick=()=>plantModeGo(b.dataset.mode);
+});
+// 「取这份原文」：把当前范围那根枝的代码放进 ①；顺手把字数报出来，让人心里有数
+function difTakeSource(){
+  const node=difScopeNode();
+  const code=改原文(node);
+  $("#plantCode").value=code;
+  const k=treeCharCount(node,false);
+  $("#difSize").textContent="≈ "+sizeText(k.chars)+"（"+k.leaves+" 片叶）";
+  toast("已取「"+node.name+"」的原文："+sizeText(k.chars));
+  return {node:node, code:code};
+}
+$("#difTake").onclick=()=>difTakeSource();
+// 「连同要求一起复制给 AI」：原文 ＋ 写法规则，一次复制到位
+$("#difSend").onclick=async()=>{
+  const got=difTakeSource();
+  const ask=$("#difAsk").value.trim();
+  const head="我要改下面这棵树的一段代码。请按它的语法改动，改完把**整份代码原样交回来**"+
+    "（不要只给片段，也不要写「第几行删掉」这种说明）。\n"+
+    (ask? "\n我的要求：" + ask + "\n" : "\n");
+  const tail="\n\n---- 以下是原文，请直接在它基础上改 ----\n\n";
+  const text=head+tail+got.code;
+  try{ await navigator.clipboard.writeText(text); toast("已复制原文＋要求，粘给 AI 即可"); }
+  catch(e){ $("#plantCode").value=got.code; $("#plantCode").select(); try{ document.execCommand("copy"); toast("已复制，粘给 AI 即可"); }catch(e2){ toast("请手动全选复制"); } }
+};
+// 「②」那栏也能从文件读入（跟植入那边一样，只是落点不同）
 $("#plantHelpBtn").onclick=()=>{ const e=$("#plantHelp"); e.style.display=(e.style.display==="none"?"":"none"); };
 $("#plantAiBtn").onclick=()=>{
   const e=$("#plantAi");
@@ -2623,8 +2690,70 @@ $("#plantOk").onclick=async()=>{
 //   · 叶的正文 → 按名字对齐着改（漏写的叶原样不动，结构重排也不丢东西）
 //   · 枝／属性 → 只写到的算「改」，没写到的原样保留（加法）；要删枝删叶，就写「株」那一种整根覆盖
 let difItems=null, difPicked=null, difShown=null;
+let difScopePath=[];                       // 改动只针对这一根枝（从当前枝往下数），[]＝当前枝自己
 function 改原文(node){ return treeToCodeRel(node||nodeAt(curPath)||DATA); }
-function difReset(){ difItems=null; difPicked=null; difShown=null; $("#difList").innerHTML=""; $("#difSay").textContent=""; $("#plantModal").querySelector(".diffsec").classList.remove("show"); }
+function difScopeNode(){
+  const cur=nodeAt(curPath)||DATA;
+  if(!difScopePath.length) return cur;
+  let n=cur;
+  for(const name of difScopePath){
+    const hit=(n.children||[]).filter(c=>c.name===name);
+    if(hit.length!==1) return cur;          // 枝没了就退回当前枝（不硬撑一棵不存在的）
+    n=hit[0];
+  }
+  return n;
+}
+function difScopeLabel(){
+  const cur=nodeAt(curPath)||DATA;
+  return crumbNamePath(curPath)+(difScopePath.length? " › "+difScopePath.join(" › ") : "");
+}
+// 一棵子树的正文大小 —— 勾之前心里有数（站在「中国美术史」上这一眼很要紧）
+function treeCharCount(n,withKids){
+  let chars=0, leaves=0, branches=1;
+  (n.leaves||[]).forEach(l=>{ chars+=String(l.desc==null?"":l.desc).length; leaves++; });
+  if(withKids) (n.children||[]).forEach(c=>{
+    const sub=treeCharCount(c,true);
+    chars+=sub.chars; leaves+=sub.leaves; branches+=sub.branches;
+  });
+  return {chars:chars, leaves:leaves, branches:branches};
+}
+const sizeText=k=>k>=1000? (Math.round(k/100)/10)+" 千字" : k+" 字";
+// 「改哪一根」那棵树：只列当前枝，勾一两层就够 —— 列太深反而找不着
+function difScopeHTML(node,path,deep){
+  const own=treeCharCount(node,false);
+  let h='<label class="dsrow"><input type="radio" name="difscope" data-path="'+esc(path.join("\u0001"))+'"'+
+    (path.join("\u0001")===difScopePath.join("\u0001")?" checked":"")+'>'+
+    '<span>'+esc(node.name)+'</span>'+
+    '<span class="dsize">'+sizeText(own.chars)+'</span>'+
+    ((node.children||[]).length?'<span class="dsnone">含 '+node.children.length+' 根下枝（不带进去）</span>':'')+
+    '</label>';
+  if(deep>0) (node.children||[]).forEach(c=>{ h+=difScopeHTML(c,path.concat(c.name),deep-1); });
+  return h;
+}
+function difScopeRender(){
+  const cur=nodeAt(curPath)||DATA;
+  $("#difScope").innerHTML=difScopeHTML(cur,[],1);
+  [...document.querySelectorAll('#difScope input[type=radio]')].forEach(r=>{
+    r.onchange=()=>{
+      difScopePath=r.dataset.path? r.dataset.path.split("\u0001").filter(x=>x) : [];
+      difScopeRender(); difBlank();
+    };
+  });
+  const k=treeCharCount(difScopeNode(),false);
+  $("#difSize").textContent="≈ "+sizeText(k.chars)+"（"+k.leaves+" 片叶）";
+}
+function difBlank(){                     // 换了范围／换了原文 → 旧的比对结果作废
+  difItems=null; difPicked=null; difShown=null;
+  $("#difList").innerHTML=""; $("#difSay").textContent=""; $("#difNew").value="";
+  difCount();
+}
+function difReset(){ difBlank(); difScopePath=[]; }
+// 两个模式各占一页：只显示在用的那页（手机窗口小，别让不用的那页抢地方）
+function plantModeGo(mode){
+  [$("#plantMode"),$("#diffMode")].forEach((el,i)=>{ el.style.display = (i===0? mode==="plant" : mode==="diff")? "" : "none"; });
+  [...document.querySelectorAll("#plantModes .ptab")].forEach(b=>b.classList.toggle("on",b.dataset.mode===mode));
+  if(mode==="diff") difScopeRender();
+}
 function difKindLabel(it){
   if(it.kind==="prop")       return {cls:"chg", t:it.from==null?"加属性":"改属性"};
   if(it.kind==="leaf")       return {cls:"chg", t:"改正文"};
@@ -2684,34 +2813,48 @@ function difRender(){
       '<div class="dl">'+difPreviewHTML(it)+"</div>";
     row.appendChild(cb); row.appendChild(main); list.appendChild(row);
   });
-  $("#plantModal").querySelector(".diffsec").classList.add("show");
   difCount();
 }
 function difCount(){
   const n=difPicked? difPicked.filter(Boolean).length : 0;
-  $("#difCount").textContent="只改这 "+n+" 处";
-  $("#difOk").textContent=n? ("落地（"+n+" 处）") : "落地";
+  if(!difItems) $("#difSay").textContent="";
+  $("#difOk").textContent="落地（"+n+" 处）";
+  $("#difInvert").textContent=n? "只留这 "+n+" 处" : "只改这几处";
 }
 $("#plantDiff").onclick=()=>{
-  const ta=$("#plantCode"), text=ta.value;
-  if(!text.trim()) return toast("请先把改好的全文粘到上面那栏");
-  const cur=nodeAt(curPath)||DATA;
+  const text=$("#difNew").value;
+  if(!text.trim()) return toast("请先把 AI 改好的全文粘到「②」那栏");
+  const node=difScopeNode();
   let res;
-  try{ res=diffCodes(改原文(cur), text); }
+  try{ res=diffCodes(改原文(node), text); }
   catch(e){ return toast("比不了 —— "+e.message); }
   if(!res.changes.length) return toast("两边一模一样，没什么可改的");
   if(res.conflicts.length) return toast("指不准 —— "+res.conflicts[0]+"（重名的地方没法替你决定）");
   difItems=res.changes; difPicked=res.changes.map(()=>true);
   difRender();
-  $("#difSay").textContent="共 "+difItems.length+" 处："+res.summary;
+  $("#difSay").textContent="共 "+difItems.length+" 处："+res.summary+"；选中 "+difItems.length+" 处";
 };
 $("#difAll").onclick=()=>{ if(difItems){ difPicked=difItems.map(()=>true); difRender(); } };
 $("#difNone").onclick=()=>{ if(difItems){ difPicked=difItems.map(()=>false); difRender(); } };
-$("#difCount").onclick=()=>{ if(difItems){ difPicked=difPicked.map(x=>!x); difRender(); } };
-$("#difCxl").onclick=()=>{ difReset(); };
+$("#difInvert").onclick=()=>{ if(difItems){ difPicked=difPicked.map(x=>!x); difRender(); } };
+$("#difLoad").onclick=()=>{
+  const inp=document.createElement("input");
+  inp.type="file"; inp.accept=".txt,.tree,text/plain"; inp.style.display="none";
+  document.body.appendChild(inp);
+  inp.onchange=()=>{
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ $("#difNew").value=String(r.result||"").replace(/^\uFEFF/,""); toast("已读入 "+f.name); };
+    r.onerror=()=>toast("读取失败");
+    r.readAsText(f,"utf-8");
+    document.body.removeChild(inp);
+  };
+  inp.click();
+};
+$("#difCxl").onclick=()=>{ difBlank(); };
 $("#difOk").onclick=async()=>{
   if(!difItems) return toast("先点「比对」");
-  const cur=nodeAt(curPath)||DATA;
+  const cur=difScopeNode();
   const before=snapTree();
   const r=落地改动(cur,difItems,difPicked);
   if(!r){ return toast("没选中要改的项"); }
