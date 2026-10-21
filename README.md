@@ -46,7 +46,7 @@
 示例树用于展示结构，删改不影响使用。
 
 - **初始化**：「植树」→「从文件读取」→ 选随包的 `示例树.txt` →「植树」（与当前枝同名会就地覆盖）
-- **查看实例**：同样地导随包的《美术史树-试用.txt》（一棵 121 枝／141 叶的美术史树，半成品）
+- **查看实例**：同样地导随包的《美术史树-试用.txt》（一棵半成品的美术史树，用来对照真实内容的写法）
 - **清空某根枝**：选中它 →「删除当前枝」
 
 ### 界面
@@ -182,8 +182,8 @@ Required Notice: Copyright (c) 2026 elu
 | 文件 | 作用 |
 |---|---|
 | `示例树.txt` | 示例树的文本代码形式（唯一来源）；改完跑 `node tools/check_data.js --write` 重新生成 `data.json` |
-| `media/` | 图片目录（仓库里只有示例树那张演示插图） |
-| `tools/` | 三套自测、内容自检、图标生成等脚本 |
+| `media/` | 图片目录（仓库里有示例树的五张演示插图） |
+| `tools/` | 四套自测、内容自检、属性播种、发布脚本等 |
 | `win-app/` | Windows 程序源码 `Program.cs`、程序图标、安装包脚本 |
 | `LICENSE.md` | 许可全文 |
 
@@ -193,7 +193,7 @@ Required Notice: Copyright (c) 2026 elu
 node tools/tree.test.js     # 37 项：夹具就是仓库自带的示例树，谁 clone 下来都能跑
 node tools/codec.test.js    # 28 项：树 ⇄ 文本代码（需要一份内容数据，没有会提示跳过）
 node tools/search.test.js   # 45 项：搜索 与 枝属性（同上）
-node tools/cloud.test.js    # 17 项：云端登录的分区/口令提示（不联网，fetch 由假服务器接管）
+node tools/cloud.test.js    # 30 项：云端登录的分区/口令提示（不联网，fetch 由假服务器接管）
 ```
 
 两条约定：
