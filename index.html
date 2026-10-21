@@ -202,6 +202,28 @@
   #plantAiText{width:100%;min-height:200px;max-height:38vh;font-family:ui-monospace,Consolas,monospace;
     font-size:11.5px;line-height:1.62;white-space:pre;overflow:auto;color:#3a342b;background:#fff;}
 
+  /* 改动（diff → 勾选 → 落地）。参照 GitHub 的 diff 列表：一回事一处，前面一个勾选框 */
+  .diffsec{display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
+  .diffsec.show{display:block;}
+  .difhead{display:flex;align-items:baseline;gap:9px;font-size:12.5px;margin-bottom:7px;}
+  .difhead .diftip{font-size:11px;color:var(--mut);}
+  .difacts{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:7px;}
+  .difacts .difsay{font-size:11.5px;color:#6b6355;}
+  .diflist{max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fdfbf6;}
+  .difrow{display:flex;gap:8px;align-items:flex-start;padding:6px 9px;border-bottom:1px solid #efe8da;font-size:12px;}
+  .difrow:last-child{border-bottom:0;}
+  .difrow input{margin-top:3px;}
+  .difrow .dpath{color:var(--mut);font-size:11px;}
+  .difrow .dkind{flex:none;font-size:10.5px;padding:0 5px;border-radius:4px;background:#efe7d8;color:#6b6355;}
+  .difrow .dkind.add{background:#e3f0e2;color:#3d6b3c;}
+  .difrow .dkind.del{background:#f6e2dc;color:#8a4a35;}
+  .difrow .dkind.chg{background:#eae4f4;color:#5a4a7a;}
+  .difrow .dl{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;white-space:pre-wrap;word-break:break-all;}
+  .dl .dln{background:#f3f8f1;color:#3a5a39;}
+  .dl .dux{background:#fdf0ec;color:#7d4330;text-decoration:line-through;}
+  .dmore{font-size:11px;color:var(--accent);cursor:pointer;padding:0 9px 6px;}
+  html.is-mobile .difrow .dl{font-size:11px;}
+
   /* ===== 手机版：三栏收成浮层，正文占满屏 =====
      判定见 <head> 里的「手机」纯函数区，结果只落在 <html class="is-mobile"> 这一个类上，
      下面每条都带 html.is-mobile 前缀 —— 桌面版一个像素都不动。
@@ -470,6 +492,28 @@ function isMobileUI(o){                      // o={ua,mobileData,width,override}
       <button id="plantClear">清空</button>
       <button id="plantCxl">取消</button>
       <button id="plantOk" class="primary">植树</button>
+    </div>
+
+    <!-- ★ 改动：粘回改好的全文 → 先看差在哪 → 再落地。
+         为什么不让人手写「删这行、加那行」：AI 大刀阔斧改过之后篇幅与结构都变了，
+         让它逐行写指令既累又易错。这里抄的是 diff → 补丁 → 应用 这条主流路。 -->
+    <div class="diffsec">
+      <div class="difhead">
+        <b>改动</b>
+        <span class="diftip">把上面那栏换成改好的全文，点「比对」，差在哪一目了然。</span>
+      </div>
+      <div class="difacts">
+        <button id="plantDiff">比对</button>
+        <button id="difAll" class="ghost">全选</button>
+        <button id="difNone" class="ghost">全不选</button>
+        <button id="difCount" class="ghost">只改这 0 处</button>
+        <span class="difsay" id="difSay"></span>
+      </div>
+      <div class="diflist" id="difList"></div>
+      <div class="acts">
+        <button id="difCxl">收起</button>
+        <button id="difOk" class="primary">落地</button>
+      </div>
     </div>
   </div>
 </div>
@@ -799,6 +843,8 @@ function codeStripIndent(line,cols){
   return line.slice(i);
 }
 // 枝（连它下面的所有枝与叶）→ 文本代码
+// 相对层级：根在 0 层，下枝从 1 层起（编辑预览里给用户看的版本，不带整棵树的缩进）
+function treeToCodeRel(node){ return treeToCode(node,1); }
 function treeToCode(node,depth){
   const pad=CODE_UNIT.repeat(depth||0);
   let out=pad+"枝 "+(node.name||"未名枝")+"\n";
@@ -868,6 +914,597 @@ function codeToTree(text){
   return out;
 }
 // ==== 树 ⇄ 文本代码 END ====
+
+// ==== 编辑语言 BEGIN（纯函数，不依赖 DOM；测试见 tools/edit.test.js）====
+// 为什么有这套：整棵树导出太累赘，而「植树」只能在某根枝下**追加/覆盖整根枝**，
+// 想把某根枝改名、抽掉一片叶、改一条属性、补一段正文，就得整棵倒出来再整棵种回去。
+// 编辑语言只**描述改动**：以当前枝为基准，用路径点出要动的那一处，改完就停。
+//
+//   进入 属性名: 值            ← 第一行决定名称；紧跟的属性行设到该枝
+//   进入 属性名-               ← 值写减号＝删掉这条属性
+//   进入 某枝 某叶             ← 空格连写即可逐层进入，不用缩进
+//   叶 新叶名                  ← 没有就新建，有就改内容（只覆盖给了正文时）
+//   改叶                       ← 叶子没有下级、正文却在更深一层时，用这行点名
+//   删                          ← 删掉上一行点名的枝，或删掉它下面所有叶
+//   属性 键: 值／属性 键-      ← 给上一行点名的枝加/改/删属性
+//
+// 枝与叶重名时：`枝 名`／`叶 名` 各行各走各的；`删`＝删枝；要删叶写 `删叶`。
+// 进入的路径**从没明确写枝的地方开始算**（属性行里的值不算）；若它不是当前枝，
+// 就取最近的已入路径（「改叶」的正文、「删」的属下行）或该点名的叶子（「叶」的正文）。
+const EDIT_STMT=/^(改叶|删叶|进入|枝|叶|删|属性|树|株)(?:[\s\u3000]+(\S.*))?$/;
+const EDIT_LEAF_CONTENT=/^(正文|内容)$/;      // 叶子没有下级，正文可以不再缩进，用这行点名
+const EDIT_PATH_SPLIT=/[\/>\u203a\uFF0F]/;    // / > › ／ 都当分隔符；带空白全角斜杠的字（如「光/影」）不受影响
+// `属性 键: 值` → {k,v,remove}；值恰好是减号（或空）＝删除这条属性
+function editPropOf(text){
+  const m=/^([^:：]+)[:：]\s*(.*)$/.exec(text||"");
+  if(!m) return null;
+  const k=m[1].trim(); if(!k) return null;
+  const raw=m[2].trim();
+  if(raw==="-") return {k:k,v:null,remove:true};
+  const v=parsePropValue(raw);
+  return (v!=null)? {k:k,v:v,remove:false} : null;
+}
+// 一行编辑语句 → 结构化（不认识就返回 null，交给上层报行号）
+function editTokenOf(trimmed){
+  const m=EDIT_STMT.exec(trimmed||"");
+  if(!m) return null;
+  const word=m[1], rest=(m[2]||"").trim();
+  if(EDIT_LEAF_CONTENT.test(word)) return {kind:"leafcontent", name:null, rest:""};
+  if(word==="进入"){
+    if(!rest) return null;
+    // 第一段若写成「键: 值」就是属性（进入 朝代: 元）；键后紧跟减号且没有冒号＝删这条属性
+    if(/^[^:：]*[:：]/.test(rest)){
+      const pr=editPropOf(rest);
+      return pr? {kind:"prop", prop:pr} : null;
+    }
+    if(/^[^:：\s]*-$/.test(rest)) return {kind:"prop", prop:{k:rest.slice(0,-1).trim(), v:null, remove:true}};
+    return {kind:"path", segs:rest.split(EDIT_PATH_SPLIT).map(s=>s.trim()).filter(s=>s)};
+  }
+  const at = word==="删"?"remove" : word==="删叶"?"rmleaf" : word==="枝"?"branch" : word==="叶"?"leaf" : word==="属性"?"prop" : word==="株"?"zao" : "tree";
+  if(at==="prop"){ const pr=editPropOf(rest); return pr? {kind:"prop", prop:pr} : {kind:"prop", bad:true, rest:rest}; }
+  return {kind:at, name:rest, rest:""};
+}
+
+// 编辑语言 → 语句流（带行号与原缩进）。叶正文＝紧跟其后、缩进更深的行，逐个去缩进：
+// 顶层去掉自己那段缩进，后面允许整行**原样顶格**，所以正文一行缩进都不用管。
+function editParse(text){
+  const toks=String(text==null?"":text).replace(/^\uFEFF/,"").replace(/\r\n?/g,"\n").split("\n")
+    .map((s,i)=>({n:i+1,s:s,ind:codeIndentOf(s),t:s.trim()}));
+  let p=0;
+  const lines=[];
+  const bad=(tok,msg)=>{ throw new SyntaxError("第 "+tok.n+" 行："+msg); };
+  function collectContent(ind){
+    const buf=[], own=[];
+    while(p<toks.length){
+      const L=toks[p];
+      if(!L.t){ p++; continue; }                  // 空行不进内容（与植树一致）
+      if(L.ind<=ind) break;
+      own.push(L); p++;
+    }
+    if(!own.length) return null;
+    const base=codeIndentOf(own[0].s);            // 第一行那段缩进就是要剥的宽度
+    own.forEach(L=>buf.push(codeStripIndent(L.s,base)));
+    while(buf.length && !buf[buf.length-1].trim()) buf.pop();
+    return buf.join("\n");
+  }
+  while(p<toks.length){
+    const L=toks[p];
+    if(!L.t){ p++; continue; }
+    const tk=editTokenOf(L.t);
+    if(!tk) bad(L,"只认这些语句：进入／枝／叶／属性／删／删叶／改叶／树");
+    p++;
+    if(tk.kind==="prop" && tk.bad) bad(L,"属性要写成「属性 键: 值」（值写减号＝删掉这条属性）");
+    if(tk.kind==="path" && !tk.segs.length) bad(L,"「进入」后面要写路径，例如「进入 明/绘画」");
+    if((tk.kind==="branch"||tk.kind==="leaf"||tk.kind==="tree") && !tk.name)
+      bad(L,"「"+(tk.kind==="branch"?"枝":tk.kind==="leaf"?"叶":"树")+"」后面要写名称");
+    if(tk.kind==="leafcontent" && !tk.text) bad(L,"「"+L.t+"」下面没有正文");
+    if(tk.kind==="rmleaf" && !tk.name) bad(L,"「删叶」后面要写叶名（要删掉某个枝的全部叶，用「删」）");
+    if(tk.kind==="leaf" || tk.kind==="leafcontent") tk.text=collectContent(L.ind);
+    if(tk.kind==="zao"){
+      tk.segs=String(tk.name).split(EDIT_PATH_SPLIT).map(x=>x.trim()).filter(x=>x);
+      if(!tk.segs.length) bad(L,"「株」后面要写要覆盖的枝");
+      tk.text=collectContent(L.ind);
+      // 先把块里那段代码解析成枝（复用植树那一套），再整根换上去
+      try{ tk.node=codeBlockToBranch(tk.text, L.n); }
+      catch(e){ bad(L, e.message.replace(/^第 \d+ 行：/,"")); }
+    }
+    lines.push(tk);
+  }
+  return lines;
+}
+
+// ---- 路径：从哪个点开始算 ----
+function editFind(root,segs){
+  let node=root, last=segs[segs.length-1];
+  for(const s of segs){
+    const cs=node.children||[];
+    const kids=cs.filter(c=>c.name===s);
+    if(!kids.length) return {node:null, last:last};
+    if(kids.length>1) return {node:null, last:last, ambiguous:true};
+    node=kids[0];
+  }
+  return {node:node, last:last};
+}
+function editIndex(root){
+  const all=[]; (function w(n,path){ all.push({node:n,path:path}); (n.children||[]).forEach((c,i)=>w(c,path.concat(i))); })(root,[]);
+  return {all:all, seen:new Set()};
+}
+function editAmbiguous(ix,segs){              // 这个路径在树里有不止一处 → 指不准
+  const hits=ix.all.filter(e=>e.path.length===segs.length && segs.every((s,i)=>e.node.name===s));
+  return hits.length>1;
+}
+function editAt(node,segs){                   // 从 node 逐层往下找；找不到返回 null
+  let cur=node;
+  for(const s of segs){
+    const hit=(cur.children||[]).filter(c=>c.name===s);
+    if(hit.length!==1) return null;
+    cur=hit[0];
+  }
+  return cur;
+}
+function editResolvePath(ctx,segs,root,fromRoot){
+  // 「进入」后面写的是**从当前枝数起**的路径；从开头就把自己这一层写进去也认（少写不犯错）
+  const first=segs[0];
+  const drop=(first===ctx.name)? segs.slice(1) : segs;
+  if(!drop.length) return {segs:[], node:ctx};
+  const hit=editAt(ctx,drop);
+  if(hit) return {segs:drop, node:hit};
+  const hit2=editAt(ctx,segs);                    // 名字本身就以当前枝名字开头的情形
+  if(hit2) return {segs:segs, node:hit2};
+  return {segs:drop, node:null};
+}
+function editAllLeaves(node){ const out=[]; (function w(n){ out.push({node:n,path:[]}); (n.children||[]).forEach(w); })(node); return out; }
+
+// ---- 应用改动的块主体 ----
+function editApply(root,lines){
+  const out={root:root, target:null, ambiguous:null, changes:[], notes:[]};
+  if(!lines||!lines.length) return out;
+  const ctx=root;                              // 编辑以当前枝为原点（画面上就是你在看的那根）
+  let i=0, target=null;
+  // 规则一：开头的连续属性行 → 落在**基准枝**（当前枝）上
+  if(lines[0] && lines[0].kind==="prop"){
+    target=ctx; out.target=ctx;
+    while(i<lines.length && lines[i].kind==="prop") editApplyProp(out,target,lines[i++].prop,lines[i-1].n);
+  }
+  while(i<lines.length){
+    const L=lines[i];
+    if(L.kind==="prop"){                   // 规则二：中间出现的属性行 → 落在**上一行点名的那个枝**
+      if(!target) target=ctx;
+      editApplyProp(out,target,L.prop,L.n); i++; continue;
+    }
+    if(L.kind==="tree"){                   // 只认出现在第一行的「树」＝给当前枝改名
+      if(i!==0) throw new SyntaxError("第 "+L.n+" 行：「树」只能出现在第一行（它给当前枝改名）");
+      editRename(out,ctx,L,n); i++; continue;
+    }
+    if(L.kind==="path"){
+      const r=editResolvePath(ctx,L.segs,root,false);
+      if(!r.node){
+        if(editAmbiguous(editIndex(root),L.segs)) throw new SyntaxError("第 "+L.n+" 行：路径「"+L.segs.join("/")+"」在树里有多处，写长一点再指一次");
+        throw new SyntaxError("第 "+L.n+" 行：找不到路径「"+L.segs.join("/")+"」");
+      }
+      target=r.node; out.target=target;
+      editNoteSame(out,target,L.n);
+      i++; continue;
+    }
+    if(L.kind==="branch"){                            // 「枝 名」：落在上一行点名的那根枝下（没有就是当前枝）
+      target=editBranch(out,target||ctx,L); i++; continue;
+    }
+    if(L.kind==="leaf" || L.kind==="leafcontent"){
+      if(!target){ throw new SyntaxError("第 "+L.n+" 行：「叶」前面要先有一行「进入 路径」或「枝 名」说清写在哪根枝上"); }
+      target=editLeaf(out,target,L); i++; continue;   // ★ 落点＝上一行点名的那根枝，不是永远当前枝
+    }
+    if(L.kind==="zao"){ editZao(out,root,L); i++; continue; }
+    if(L.kind==="remove"){ editRemove(out,target,L); target=(out.target=null, null); i++; continue; }
+    if(L.kind==="rmleaf"){ editRemoveLeaf(out,target,L); i++; continue; }
+    i++;
+  }
+  return out;
+}
+function editNoteSame(out,node,n){
+  if(node===out.root) out.notes.push("第 "+n+" 行的路径落在当前枝自身上（那行等于没写）");
+}
+function editRename(out,ctx,name,L){
+  const old=ctx.name;
+  if(old===name) return;
+  ctx.name=name;
+  out.changes.push("把当前枝「"+old+"」改名为「"+name+"」");
+}
+function editApplyProp(out,node,pr,n){
+  if(!pr) return;
+  if(pr.remove){
+    if(node.props && Object.prototype.hasOwnProperty.call(node.props,pr.k)){
+      if(Object.keys(node.props).length===1) delete node.props;
+      else delete node.props[pr.k];
+      out.changes.push("删属性 「"+node.name+"」·"+pr.k);
+    }
+    else if(n) out.notes.push("第 "+n+" 行：「"+node.name+"」本来就没有属性「"+pr.k+"」，跳过");
+    return;
+  }
+  if(!node.props || typeof node.props!=="object" || Array.isArray(node.props)) node.props={};
+  const had=Object.prototype.hasOwnProperty.call(node.props,pr.k);
+  node.props[pr.k]=pr.v;
+  out.changes.push((had?"改":"加")+"属性 「"+node.name+"」·"+pr.k);
+}
+// `枝 名`（写在枝块里）：取同级同名的枝，没有就新建 —— 这是**加法**：块里没写的属性与叶一概不动
+function editBranch(out,ctx,L){
+  const name=L.name;
+  const kids=(ctx.children||[]).filter(c=>c.name===name);
+  if(kids.length>1) throw new SyntaxError("第 "+L.n+" 行：「"+ctx.name+"」下面有 "+kids.length+" 根都叫「"+name+"」的枝，没法确定是哪一根");
+  if(kids.length===1){ out.notes.push("第 "+L.n+" 行：「"+name+"」原本就存在，往里改"); return kids[0]; }
+  const node={name:name, leaves:[], children:[]};
+  (ctx.children=ctx.children||[]).push(node);
+  out.changes.push("加枝 「"+ctx.name+"」/「"+name+"」");
+  return node;
+}
+// `株 路径`（只能出现在顶层）：新建一根带正文的枝。
+// 为什么要有它：`枝 名` 是纯加法（找不到才建），而**覆盖式**恰恰要「这一根，里面就是这个样子」
+// —— 只写比 `株` 里那段多出来的东西永远不会被删掉。见下面 diff 那段的说明。
+function editPlant(out,root,segs,node){
+  const first=segs[0];
+  const top=(first===root.name);                 // 以根名开头＝从整棵树往下找
+  const from=top? root : (root.children||[]).find(c=>c.name===first);
+  const rel=top? segs.slice(1) : segs;
+  if(!rel.length) throw new SyntaxError("「株」后面要写要覆盖的枝，例如「株 明/绘画/山水」");
+  let parent=root;
+  // 找到倒数第二层：路径里每一段都必须存在，且同级同名只能有一根
+  for(let i=0;i<rel.length-1;i++){
+    const seg=rel[i];
+    const hit=(parent.children||[]).filter(c=>c.name===seg);
+    if(!hit.length) throw new SyntaxError("找不到路径「"+rel.join("/")+"」（卡在「"+seg+"」）");
+    if(hit.length>1) throw new SyntaxError("路径「"+rel.join("/")+"」在「"+parent.name+"」下有 "+hit.length+" 根同名的枝，写长一点再指一次");
+    parent=hit[0];
+  }
+  const last=rel[rel.length-1];
+  const hit=(parent.children||[]).filter(c=>c.name===last);
+  if(hit.length>1) throw new SyntaxError("「"+parent.name+"」下面有 "+hit.length+" 根都叫「"+last+"」的枝，没法确定是哪一根");
+  const fresh=JSON.parse(JSON.stringify(node));
+  if(hit.length===1){ parent.children=parent.children.map(c=>c===hit[0]? fresh : c); out.changes.push("覆盖 «"+rel.join("/")+"»（整根换掉）"); }
+  else { (parent.children=parent.children||[]).push(fresh); out.changes.push("加枝 «"+rel.join("/")+"»"); }
+  out.target=fresh;
+  return fresh;
+}
+// `叶 名`：在上一行点名的那根枝里取同名的叶；没有就新建。给了正文就整片替换正文
+// 注意第二个参数就是「上一行点名的那根枝」—— 别写成固定的当前枝
+function editLeaf(out,ctx,L){
+  const name=L.name||"叶";
+  const cur=(ctx.leaves||[]).filter(l=>l.name===name);
+  if(cur.length>1) throw new SyntaxError("第 "+L.n+" 行：「"+ctx.name+"」下面有 "+cur.length+" 片都叫「"+name+"」的叶，没法确定是哪一片");
+  if(cur.length===0){
+    if(!ctx.leaves) ctx.leaves=[];
+    const lf={name:name, desc:L.text==null?"":L.text};
+    ctx.leaves.push(lf);
+    out.changes.push("加叶 「"+ctx.name+"」/「"+name+"」"+(L.text!=null?"＋正文":""));
+    return lf;
+  }
+  const lf=cur[0];
+  if(L.text!=null && L.text!==String(lf.desc==null?"":lf.desc)){
+    lf.desc=L.text;
+    out.changes.push("改叶正文 「"+ctx.name+"」/「"+name+"」");
+  }
+  return lf;
+}
+// 「株」块里那几行 → 一根枝。能写啥：一根「枝 X」、它的「属性」、它的「叶」，叶正文再缩深一层；
+// 「枝」写的是**第二根要不要覆盖的枝**，第二层以下的「枝」只是它的下枝，不冲突
+function codeBlockToBranch(text,ln){
+  const toks=String(text==null?"":text).split("\n")
+    .map((s,i)=>({s:s, ind:codeIndentOf(s), t:s.trim()}))
+    .filter(x=>x.t);
+  if(!toks.length) throw new SyntaxError("第 "+ln+" 行：「株」下面要写这根枝长什么样");
+  const first=codeStatementOf(toks[0].t);
+  if(!first || first.kind!=="branch")
+    throw new SyntaxError("第 "+ln+" 行：「株」下面第一行要缩进着写「枝 X」（之后写它的属性与叶）");
+  const base=toks[0].ind;
+  const branch={name:first.name, leaves:[], children:[]};
+  const props={};
+  let last=null;
+  for(let k=1;k<toks.length;k++){
+    const L=toks[k];
+    if(L.ind<=base) throw new SyntaxError("第 "+ln+" 行：「株」下面只能写一根枝 —— 第 "+(k+1)+" 行比「枝 "+branch.name+"」还浅，要覆盖另一根就另起一行「株」");
+    const st=codeStatementOf(L.t);
+    if(st && st.kind==="prop"){
+      const pr=codePropOf(st.name);
+      if(pr) props[pr.k]=pr.v;
+      last=null; continue;
+    }
+    if(st && st.kind==="leaf"){
+      last={name:st.name, desc:""}; branch.leaves.push(last); continue;
+    }
+    if(st && st.kind==="branch"){       // 下枝：整块再交给植树那套解析（「枝 下枝」＋更深的都算它）
+      const rest=toks.slice(k).map(x=>x.s).join("\n");
+      const sub=codeToTree("枝 占位\n"+rest);
+      (sub.children[0]&&sub.children[0].children||[]).forEach(c=>branch.children.push(c));
+      break;
+    }
+    if(!last) throw new SyntaxError("第 "+ln+" 行：「株」下面第 "+(k+1)+" 行认不出 —— 只能写属性、叶，或叶的正文");
+    const strip=Math.min(base+CODE_UNIT.length*2, L.ind);
+    last.desc=(last.desc? last.desc+"\n" : "")+codeStripIndent(L.s, strip);
+  }
+  for(const lf of branch.leaves) lf.desc=lf.desc.replace(/\s+$/,"");
+  if(Object.keys(props).length) branch.props=props;
+  return branch;
+}
+function editZao(out,root,L){ editPlant(out,root,L.segs||[],L.node); }
+// `删`：没点名＝删掉上一行点名的枝；点了名＝删掉它下面所有叶
+function editRemove(out,target,L){
+  if(!target) throw new SyntaxError("第 "+L.n+" 行：「删」前面要有一行先点名（枝、叶或进入）");
+  if(L.name){
+    const kids=(target.children||[]).filter(c=>c.name===L.name);
+    if(kids.length!==1) throw new SyntaxError("第 "+L.n+" 行：「"+target.name+"」下面"+(kids.length?"有多根":"没有")+"叫「"+L.name+"」的枝");
+    const del=kids[0];
+    target.children=target.children.filter(c=>c!==del);
+    out.changes.push("删枝 「"+target.name+"」/「"+del.name+"」（连同它的叶与下枝）");
+    return;
+  }
+  if(!target) throw new SyntaxError("第 "+L.n+" 行：「删」前面要有一行先点名（枝、叶或进入）");
+  // 属性行与枝行属于这根枝本身，跟着留；被删的只有叶（这正是编辑语言该有的分寸）
+  const ls=target.leaves||[];
+  if(!ls.length) throw new SyntaxError("第 "+L.n+" 行：「"+target.name+"」本来就没有叶可删");
+  target.leaves=[];
+  out.changes.push("删叶 「"+target.name+"」全部 "+ls.length+" 片");
+  out.node=target;
+  return;
+}
+function editRemoveLeaf(out,target,L){
+  if(!target) throw new SyntaxError("第 "+L.n+" 行：「删叶」前面要有一行先点名");
+  const name=L.name;
+  if(!name){                                   // 没点名＝删掉这个枝的叶时，用「删」；这里必须点名
+    throw new SyntaxError("第 "+L.n+" 行：「删叶」后面要写叶名");
+  }
+  const cur=(target.leaves||[]).filter(l=>l.name===name);
+  if(cur.length!==1) throw new SyntaxError("第 "+L.n+" 行：「"+target.name+"」下面"+(cur.length?"有多片":"没有")+"叫「"+name+"」的叶");
+  target.leaves=target.leaves.filter(l=>l!==cur[0]);
+  out.changes.push("删叶 「"+target.name+"」/「"+name+"」");
+}
+// 顶层入口：返回 {ok,root,changes,notes,error}；出错时根一个字节都不动（先改副本）
+function applyEdit(root,text,cfg){
+  cfg=cfg||{};
+  let lines;
+  try{ lines=editParse(text); }
+  catch(e){ return {ok:false, error:e.message, changes:[], notes:[], root:root}; }
+  if(!lines.length) return {ok:false, error:"代码是空的", changes:[], notes:[], root:root};
+  const work=JSON.parse(JSON.stringify(root));          // ★ 改副本：出错不留半成品
+  let res;
+  try{ res=editApply(work,lines); }
+  catch(e){ return {ok:false, error:e.message, changes:[], notes:[], root:root}; }
+  if(!res.changes.length)
+    return {ok:false, error:"没有可做的改动"+(res.notes.length?"（"+res.notes[0]+"）":""), changes:[], notes:res.notes, root:root};
+  return {ok:true, root:work, changes:res.changes, notes:res.notes, target:res.target};
+}
+// ==== 差异（diff）BEGIN ====
+// 为什么要有这段：让 AI 「大刀阔斧地改」的正确用法，不是让 AI 写逐行指令，
+// 而是**给它原文 A、收它的 A1 全文，由程序算出 A 与 A1 之间的增量**。
+// 算法是主流的两种：按名字对齐（叶）、按名字对齐后递归（枝）、正文按行做 LCS；
+// 产出的每一项都长得像 JSON Patch 的一个 op（add/remove/replace/move），所以能预览、能勾选、能当数据存。
+//
+// 三种「给回来的样子」，各有各的落地方式（这一步定错，会悄悄丢数据）：
+//   · 叶的正文      → 带名字回写＝改；漏写的叶＝原封不动（AI 只需要交它动过的那几片）
+//   · 枝与属性      → 缺的字段一律保留（「只写改了什么」是加法）
+//   · 整根枝叶全写  → 得有一句「这一根就是这样」，否则删掉的枝会死而复生 →
+//                     这就是「株」：它说的才是「整根覆盖」，普通「枝」只做加法
+const DIFF_CTX=1;                                  // 正文改动上下各留几行做定位（改小一点差览更短）
+const DIFF_MIN_EQUALS=2;                           // 至少这么多行相同才算个有意义的定位块（否则整段重写）
+const DIFF_MAX_CELLS=6000000;                      // 行数悬殊时放弃 LCS 退化成「整片替换」，别把界面卡死
+
+// 最朴素的对齐：按等价判定分组 → 用唯一命中配唯一命中（够用且不会错配）
+function pairGroups(aItems,bItems,aKey,bKey,eqFn){
+  const ga=new Map(), gb=new Map();
+  aItems.forEach(x=>{ const k=aKey(x); if(!ga.has(k))ga.set(k,[]); ga.get(k).push(x); });
+  bItems.forEach(y=>{ const k=bKey(y); if(!gb.has(k))gb.set(k,[]); gb.get(k).push(y); });
+  const pairs=[], onlyA=[], onlyB=[];
+  for(const [k,as] of ga){
+    const bs=gb.get(k)||[];
+    const la=as.filter(x=>eqFn?eqFn(x,bs[0]):true);
+    const ok=eqFn? as.every(x=>bs.some(y=>eqFn(x,y))) && bs.every(y=>as.some(x=>eqFn(x,y))) : (as.length===bs.length);
+    if(bs.length && ok && as.length===bs.length){ as.forEach((x,i)=>pairs.push([x,bs[i]])); }
+    else { onlyA.push(...as); }
+  }
+  for(const [k,bs] of gb){ if(!ga.has(k)) onlyB.push(...bs); }
+  return {pairs:pairs, onlyA:onlyA, onlyB:onlyB};
+}
+
+// 行级 LCS：返回「行数相同的块」序列 [{a:起始行, b:起始行, n:行数}]，块与块之间就是改动
+function diffLines(xs,ys){
+  const n=xs.length, m=ys.length;
+  if(!n || !m) return {common:[], replaceAll:true};
+  if(n*m>DIFF_MAX_CELLS) return {common:[], replaceAll:true};
+  const dp=[];
+  for(let i=0;i<=n;i++) dp.push(new Int32Array(m+1));
+  for(let i=n-1;i>=0;i--)
+    for(let j=m-1;j>=0;j--)
+      dp[i][j]= xs[i]===ys[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const common=[];
+  let i=0,j=0;
+  while(i<n && j<m){
+    if(xs[i]===ys[j]){ common.push([i,j]); i++; j++; }
+    else if(dp[i+1][j]>=dp[i][j+1]) i++;
+    else j++;
+  }
+  if(common.length<DIFF_MIN_EQUALS) return {common:[], replaceAll:true};
+  // 相邻的公共行并成块
+  const blocks=[];
+  let run=null;
+  for(const [ai,bj] of common){
+    if(run && ai===run.aEnd+1 && bj===run.bEnd+1){ run.aEnd=ai; run.bEnd=bj; }
+    else { run={a:ai, b:bj, aEnd:ai, bEnd:bj}; blocks.push(run); }
+    run.n=run.aEnd-run.a+1;
+  }
+  return {common:blocks.map(r=>({a:r.a, b:r.b, n:r.n})), replaceAll:false};
+}
+// 两份正文 → 改动项。hunks 是「一段被删的 + 一段新写的 + 前面共有几行做定位」，
+// 行数悬殊或几乎没有共同行时 replaceAll＝整片重写（照样只算一处改动）
+function diffLeaves(descA,descB){
+  const tail=x=>{ let k=x.length; while(k && !x[k-1].trim()) k--; return x.slice(0,k); };
+  // 逐行去尾空格：否则「多敲一个空格」会被算成整片重写，预览就成了「全都改了」
+  const trimEnd=x=>x.map(l=>l.replace(/[ \t]+$/,""));
+  const A=trimEnd(tail(String(descA==null?"":descA).replace(/\r\n?/g,"\n").split("\n")));
+  const B=trimEnd(tail(String(descB==null?"":descB).replace(/\r\n?/g,"\n").split("\n")));
+  if(A.join("\n")===B.join("\n")) return null;
+  const d=diffLines(A,B);
+  const H=lo=>lo.map((l,i)=>({t:"=",s:l}));                 // 从行序列拼出一段可点击的差值
+  if(d.replaceAll) return {kind:"leaf", replaceAll:true,
+    hunks:[{lead:0, del:H(A), add:H(B)}], fromN:A.length, toN:B.length};
+  const hunks=[];
+  let pa=0, pb=0;
+  for(const blk of d.common){
+    if(blk.a>pa || blk.b>pb){
+      hunks.push({lead:Math.min(DIFF_CTX,pa), del:H(A.slice(pa,blk.a)), add:H(B.slice(pb,blk.b))});
+    }
+    pa=blk.a+blk.n; pb=blk.b+blk.n;
+  }
+  if(A.length>pa || B.length>pb) hunks.push({lead:Math.min(DIFF_CTX,pa), del:H(A.slice(pa)), add:H(B.slice(pb))});
+  return {kind:"leaf", hunks:hunks, commonN:d.common.reduce((k,b)=>k+b.n,0)};
+}
+// 两份代码（当前枝 与 改好的全文）→ 逐项改动。只认「枝」与它下面的「属性／叶」，与植树同一套解析
+function codeToBranchMap(code){
+  const t=codeToTree(String(code==null?"":code).replace(/^\uFEFF/,""));
+  return {title:t.title, nodes:t.children||[]};
+}
+// 递归比较两根枝，按名字对齐（重名多处＝说不清，返回 conflict 交给界面如实报告）
+function diffBranch(a,b,path,out,seen){
+  const P=path? path+" / "+a.name : a.name;
+  // 属性：键对齐
+  const pa=(a.props&&typeof a.props==="object")?a.props:{}, pb=(b.props&&typeof b.props==="object")?b.props:{};
+  for(const k of Object.keys(pb)){
+    const va=pa[k], vb=pb[k];
+    if(va===undefined){ out.push({kind:"prop", path:P, key:k, from:null, to:vb}); continue; }
+    const ta=Array.isArray(va)?va.join(","):String(va), tb=Array.isArray(vb)?vb.join(","):String(vb);
+    if(ta!==tb) out.push({kind:"prop", path:P, key:k, from:va, to:vb});
+  }
+  // 叶：名字对齐，逐个比正文
+  const la=a.leaves||[], lb=b.leaves||[];
+  const ga=new Set(la.map(x=>x.name)), gb=new Set(lb.map(x=>x.name));
+  const dupA=new Set(), dupB=new Set();
+  const cnt=(arr,dst)=>{ const m=new Map(); arr.forEach(x=>m.set(x.name,(m.get(x.name)||0)+1)); m.forEach((v,k)=>{ if(v>1) dst.add(k); }); };
+  cnt(la,dupA); cnt(lb,dupB);
+  [...dupA, ...dupB].forEach(nm=>{ if(!seen.conflict.includes(P+" / "+nm)) seen.conflict.push(P+" / "+nm); });
+  lb.forEach(lf=>{
+    const hit=la.filter(x=>x.name===lf.name);
+    if(!hit.length){ out.push({kind:"leafAdd", path:P, name:lf.name, desc:lf.desc}); return; }
+    if(hit.length>1){ out.push({kind:"conflict", path:P, name:lf.name, why:"同一根枝下有多片同名的叶"}); return; }
+    const dl=diffLeaves(hit[0].desc, lf.desc);
+    if(dl) out.push({kind:"leaf", path:P, name:lf.name, from:hit[0].desc, to:lf.desc, sub:dl});
+  });
+  la.forEach(lf=>{ if(!gb.has(lf.name)) out.push({kind:"leafRemove", path:P, name:lf.name}); });
+  // 枝：先数一遍，重名就不猜
+  const ca=a.children||[], cb=b.children||[];
+  const names=new Set([...ca.map(x=>x.name), ...cb.map(x=>x.name)]);
+  for(const nm of names){
+    const ka=ca.filter(x=>x.name===nm), kb=cb.filter(x=>x.name===nm);
+    if(ka.length>1 && kb.length) seen.conflict.push(P+" / "+nm+"（重名）");
+    if(kb.length===0){
+      ka.forEach(x=>out.push({kind:"branchRemove", path:P, name:nm, subtree:x}));
+    }else if(ka.length===0){
+      kb.forEach(x=>out.push({kind:"branchAdd", path:P, name:nm, node:x}));
+    }else if(ka.length===1 && kb.length===1){
+      diffBranch(ka[0], kb[0], P, out, seen);      // 同名枝接着往下比
+    }else{
+      seen.conflict.push(P+" / "+nm+"（重名）");
+    }
+  }
+  return out;
+}
+// 人话版摘要（给预演列表与提示用）
+function diffSummary(list){
+  const n={prop:0,leaf:0,leafAdd:0,leafRemove:0,branchAdd:0,branchRemove:0,conflict:0};
+  list.forEach(it=>{ n[it.kind]=(n[it.kind]||0)+1; });
+  const bits=[];
+  if(n.branchAdd) bits.push("加枝 "+n.branchAdd);
+  if(n.branchRemove) bits.push("删枝 "+n.branchRemove);
+  if(n.leafAdd) bits.push("加叶 "+n.leafAdd);
+  if(n.leafRemove) bits.push("删叶 "+n.leafRemove);
+  if(n.leaf) bits.push("改正文 "+n.leaf);
+  if(n.prop) bits.push("改属性 "+n.prop);
+  if(n.conflict) bits.push("指不准 "+n.conflict+" 处");
+  return bits.length? bits.join("、") : "没有任何差别";
+}
+// 入口：比较两份**代码**（原文 A 与改好的 A1）→ 改动清单。冲突不替人决定，如实交出去
+function diffCodes(codeA,codeB){
+  const A=codeToBranchMap(codeA), B=codeToBranchMap(codeB);
+  if((A.nodes||[]).length!==1 || (B.nodes||[]).length!==1)
+    throw new SyntaxError("比对的代码里只能有一根枝（多出来的「枝」请拆成几次）");
+  const out=[], seen={conflict:[]};
+  diffBranch(A.nodes[0], B.nodes[0], "", out, seen);
+  out.forEach(it=>{ if(!it.rootName) it.rootName=A.nodes[0].name; });
+  return {root:A.nodes[0], changes:out, conflicts:seen.conflict, summary:diffSummary(out)};
+}
+// ==== 差异（diff）END ====
+
+// ==== 落地（把勾选的差异写回真树）BEGIN ====
+// 只有这一处会改真树，所以三条规矩都收在这里：
+//   ① 只认勾选的那几项（顺序天然是先父后子，删枝时下枝自然没了）
+//   ② 找不到落点就跳过，不做半截（条目里自带路径，坏了的条目不影响别的）
+//   ③ 返回动了几处 + 一句能写进撤销栈的话
+function editParentOf(root,pathArr){
+  if(!pathArr.length) return {parent:root, self:root};
+  // 起点那根枝的名字一般不带在路径里；写进来了也认（免得「明/绘画」与「绘画」两套写法打架）
+  const drop=(pathArr[0]===root.name)? pathArr.slice(1) : pathArr;
+  let cur=root;
+  for(const seg of drop){
+    const hit=(cur.children||[]).filter(c=>c.name===seg);
+    if(hit.length!==1) return null;
+    cur=hit[0];
+  }
+  return {parent:cur, self:cur};
+}
+function 落地改动(root,items,picked){
+  if(!items || !items.length) return null;
+  let moved=0, dropped=0;
+  const kinds={};
+  items.forEach((it,idx)=>{
+    if(picked && !picked[idx]) return;
+    const segs=it.path? String(it.path).split(" / ") : [];
+    // 差览里的顶层是「比较的起点」，不带它自己的名字；落回真树时它通常是根下面的第一层。
+    // 所以先按原样找，找不到就试着把它自己的名字补在前面。
+    const nameOf=it.rootName||"";
+    const cands=[segs];
+    if(nameOf) cands.push([nameOf].concat(segs));          // 起点那根枝自己的名字也写进路径
+    let node=null;
+    for(const cnd of cands){ const h=editParentOf(root,cnd); if(h){ node=h.self; break; } }
+    if(!node){ dropped++; return; }
+    if(it.kind==="prop"){
+      const props=node.props&&typeof node.props==="object"&&!Array.isArray(node.props)? node.props : {};
+      if(it.to==null){ delete props[it.key]; }else{ props[it.key]=it.to; }
+      if(Object.keys(props).length) node.props=props; else delete node.props;
+      moved++; kinds[it.kind]=(kinds[it.kind]||0)+1;
+    }else if(it.kind==="leaf"){
+      const ls=(node.leaves||[]).filter(l=>l.name===it.name);
+      if(ls.length!==1){ dropped++; return; }
+      ls[0].desc=it.to;
+      moved++; kinds[it.kind]=(kinds[it.kind]||0)+1;
+    }else if(it.kind==="leafAdd"){
+      if(!node.leaves) node.leaves=[];
+      if(node.leaves.some(l=>l.name===it.name)){ dropped++; return; }
+      node.leaves.push({name:it.name, desc:it.desc==null?"":it.desc});
+      moved++; kinds[it.kind]=(kinds[it.kind]||0)+1;
+    }else if(it.kind==="leafRemove"){
+      const keep=(node.leaves||[]).filter(l=>l.name!==it.name);
+      if(keep.length===(node.leaves||[]).length){ dropped++; return; }
+      node.leaves=keep; if(!node.leaves.length) delete node.leaves;
+      moved++; kinds[it.kind]=(kinds[it.kind]||0)+1;
+    }else if(it.kind==="branchAdd"){
+      if(!node.children) node.children=[];
+      if(node.children.some(c=>c.name===it.name)){ dropped++; return; }
+      node.children.push(JSON.parse(JSON.stringify(it.node)));
+      moved++; kinds[it.kind]=(kinds[it.kind]||0)+1;
+    }else if(it.kind==="branchRemove"){
+      const keep=(node.children||[]).filter(c=>c.name!==it.name);
+      if(keep.length===(node.children||[]).length){ dropped++; return; }
+      node.children=keep; if(!node.children.length) delete node.children;
+      moved++; kinds[it.kind]=(kinds[it.kind]||0)+1;
+    }else{ dropped++; }
+  });
+  if(!moved) return null;
+  const bits=[];
+  if(kinds.branchAdd) bits.push("加枝 "+kinds.branchAdd);
+  if(kinds.branchRemove) bits.push("删枝 "+kinds.branchRemove);
+  if(kinds.leafAdd) bits.push("加叶 "+kinds.leafAdd);
+  if(kinds.leafRemove) bits.push("删叶 "+kinds.leafRemove);
+  if(kinds.leaf) bits.push("改正文 "+kinds.leaf);
+  if(kinds.prop) bits.push("改属性 "+kinds.prop);
+  return {n:moved, dropped:dropped, label:bits.join("、")};
+}
+// ==== 落地（把勾选的差异写回真树）END ====
+// ==== 编辑语言 END ====
 // ==== 纯函数区 END ====
 
 // ---- 渲染 ----
@@ -1838,6 +2475,7 @@ $("#btnMove").onclick=()=>{
 function openPlant(){
   const n=nodeAt(curPath)||DATA;
   $("#plantVia").textContent="种在："+crumbNamePath(curPath)+"（即当前枝「"+n.name+"」之下）";
+  difReset();
   $("#plantModal").classList.add("show");
   $("#plantCode").focus();
 }
@@ -1889,7 +2527,13 @@ const AI_GUIDE=[
 "    叶 插图",
 "      ![[尾豏魚賄尾|竖线后面是题注]]",
 "",
-"【七、输出前自检】每一行的关键字是 树／枝／叶／属性 之一；每片叶的正文都比该叶行缩进更深；属性写在所属枝行下方；没有空属性行。"
+"【七、输出前自检】每一行的关键字是 树／枝／叶／属性 之一；每片叶的正文都比该叶行缩进更深；属性写在所属枝行下方；没有空属性行。",
+"",
+"【八、如果你在改一棵树】直接用「生成当前枝的代码」那份当底稿，改完把**全文**交出来即可 ——",
+"  不要只给片段、也不要写「第几行删掉」这种指令：程序会自己比对两份、算出差在哪，再由人勾选落地。",
+"  · 想删掉某根枝或某片叶，就在返回的全文里干脆不写它（程序按「全文比对」认得出是删掉）",
+"  · 只动一小段正文时，把没动的部分原样抄回，别改写措辞 —— 否则会被当成整片重写",
+"  · 保持枝名、叶名不变：名字是对齐的依据；要改名的，一次只改一处，别在同一个回复里又改名又搬家"
 ].join("\n");
 
 $("#plantHelpBtn").onclick=()=>{ const e=$("#plantHelp"); e.style.display=(e.style.display==="none"?"":"none"); };
@@ -1911,6 +2555,7 @@ $("#plantClear").onclick=()=>{ $("#plantCode").value=""; $("#plantCode").focus()
 $("#plantGen").onclick=()=>{
   const n=nodeAt(curPath)||DATA;
   $("#plantCode").value=treeToCode(n);
+  difReset();
   toast("已按当前枝生成代码");
 };
 let codeInput=null;
@@ -1924,7 +2569,7 @@ $("#plantLoad").onclick=()=>{
   codeInput.onchange=()=>{
     const f=codeInput.files&&codeInput.files[0]; if(!f) return;
     const r=new FileReader();
-    r.onload=()=>{ $("#plantCode").value=String(r.result||"").replace(/^\uFEFF/,""); toast("已读入 "+f.name); };
+    r.onload=()=>{ $("#plantCode").value=String(r.result||"").replace(/^\uFEFF/,""); difReset(); toast("已读入 "+f.name); };
     r.onerror=()=>toast("读取失败");
     r.readAsText(f,"utf-8");
   };
@@ -1970,6 +2615,110 @@ $("#plantOk").onclick=async()=>{
     +(newLeaves.length?"、加叶 "+newLeaves.length+" 片":"")+"（在「"+cur.name+"」下）",before);
   await save(); $("#plantModal").classList.remove("show"); render();
   toast("已植树：新增 "+added+" 枝、覆盖 "+replaced+" 枝"+(skipped?"、跳过 "+skipped:"")+(newLeaves.length?"、加叶 "+newLeaves.length+" 片":""));
+};
+
+// ---- 改动：A（当前枝的代码）⇄ A1（改好的全文）→ 算差异 → 勾选 → 落地 ----
+// 这条路才是日常：让 AI 大刀阔斧改，然后**只看它到底改了什么**，再决定收不收。
+// 里面遇到的两处讲究：
+//   · 叶的正文 → 按名字对齐着改（漏写的叶原样不动，结构重排也不丢东西）
+//   · 枝／属性 → 只写到的算「改」，没写到的原样保留（加法）；要删枝删叶，就写「株」那一种整根覆盖
+let difItems=null, difPicked=null, difShown=null;
+function 改原文(node){ return treeToCodeRel(node||nodeAt(curPath)||DATA); }
+function difReset(){ difItems=null; difPicked=null; difShown=null; $("#difList").innerHTML=""; $("#difSay").textContent=""; $("#plantModal").querySelector(".diffsec").classList.remove("show"); }
+function difKindLabel(it){
+  if(it.kind==="prop")       return {cls:"chg", t:it.from==null?"加属性":"改属性"};
+  if(it.kind==="leaf")       return {cls:"chg", t:"改正文"};
+  if(it.kind==="leafAdd")    return {cls:"add", t:"加叶"};
+  if(it.kind==="leafRemove") return {cls:"del", t:"删叶"};
+  if(it.kind==="branchAdd")  return {cls:"add", t:"加枝"};
+  if(it.kind==="branchRemove") return {cls:"del", t:"删枝"};
+  return {cls:"del", t:"指不准"};
+}
+function difText(it){
+  const v=x=>Array.isArray(x)?x.join("，"):(x==null?"（空）":String(x));
+  if(it.kind==="prop") return it.key+"："+(it.from==null?"":v(it.from)+" → ")+v(it.to);
+  if(it.kind==="leafAdd") return it.name+"（新增，正文 "+String(it.desc||"").split("\n").filter(x=>x.trim()).length+" 行）";
+  if(it.kind==="leafRemove") return it.name+"（删除）";
+  if(it.kind==="branchAdd") return "枝 "+it.name+"（新增，连同它的叶与下枝）";
+  if(it.kind==="branchRemove") return "枝 "+it.name+"（删除，连同它的叶与下枝）";
+  if(it.kind==="leaf"){
+    const s=it.sub||{};
+    if(s.replaceAll) return "叶 "+it.name+"（整片换掉："+s.fromN+" 行 → "+s.toN+" 行）";
+    const nh=(s.hunks||[]).length;
+    if(nh===1 && (s.hunks[0].del.length===1 && s.hunks[0].add.length===1)) return it.name+"（改了一行）";
+    return it.name+"（"+nh+" 处，"+(s.hunks||[]).reduce((k,h)=>k+h.del.length+h.add.length,0)+" 行有出入）";
+  }
+  return "（"+it.kind+"）";
+}
+// 一处改动的迷你 diff（只留改动行与前后各一行）
+function difPreviewHTML(it){
+  const esc2=s=>esc(s).replace(/^ /,"&nbsp;");
+  if(it.kind==="leaf" && it.sub && it.sub.hunks){
+    const ls=[];
+    it.sub.hunks.slice(0,4).forEach(h=>{
+      h.del.forEach(d=>ls.push('<span class="dux">- '+esc2(d.s)+"</span>"));
+      h.add.forEach(d=>ls.push('<span class="dln">+ '+esc2(d.s)+"</span>"));
+    });
+    return ls.join("\n");
+  }
+  if(it.kind==="prop"){
+    const v=x=>esc(Array.isArray(x)?x.join("，"):(x==null?"":String(x)));
+    return (it.from!=null? '<span class="dux">- '+v(it.from)+"</span>\n":"")+'<span class="dln">+ '+v(it.to)+"</span>";
+  }
+  if(it.kind==="branchAdd" || it.kind==="branchRemove") return '<span class="'+(it.kind==="branchAdd"?"dln":"dux")+'">'+
+    esc(it.kind==="branchAdd"?"+ 整根枝及其内容":"- 整根枝及其内容")+'</span>';
+  return "";
+}
+function difRender(){
+  if(!difItems) return;
+  const list=$("#difList"); list.innerHTML="";
+  difItems.forEach((it,i)=>{
+    const lb=difKindLabel(it);
+    const row=document.createElement("label"); row.className="difrow";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!difPicked[i];
+    cb.onchange=()=>{ difPicked[i]=cb.checked; difCount(); };
+    const main=document.createElement("div");
+    main.innerHTML='<span class="dkind '+lb.cls+'">'+lb.t+'</span> '+
+      '<span class="dpath">'+esc(it.path||"")+'</span>'+
+      '<div>'+esc(difText(it))+'</div>'+
+      '<div class="dl">'+difPreviewHTML(it)+"</div>";
+    row.appendChild(cb); row.appendChild(main); list.appendChild(row);
+  });
+  $("#plantModal").querySelector(".diffsec").classList.add("show");
+  difCount();
+}
+function difCount(){
+  const n=difPicked? difPicked.filter(Boolean).length : 0;
+  $("#difCount").textContent="只改这 "+n+" 处";
+  $("#difOk").textContent=n? ("落地（"+n+" 处）") : "落地";
+}
+$("#plantDiff").onclick=()=>{
+  const ta=$("#plantCode"), text=ta.value;
+  if(!text.trim()) return toast("请先把改好的全文粘到上面那栏");
+  const cur=nodeAt(curPath)||DATA;
+  let res;
+  try{ res=diffCodes(改原文(cur), text); }
+  catch(e){ return toast("比不了 —— "+e.message); }
+  if(!res.changes.length) return toast("两边一模一样，没什么可改的");
+  if(res.conflicts.length) return toast("指不准 —— "+res.conflicts[0]+"（重名的地方没法替你决定）");
+  difItems=res.changes; difPicked=res.changes.map(()=>true);
+  difRender();
+  $("#difSay").textContent="共 "+difItems.length+" 处："+res.summary;
+};
+$("#difAll").onclick=()=>{ if(difItems){ difPicked=difItems.map(()=>true); difRender(); } };
+$("#difNone").onclick=()=>{ if(difItems){ difPicked=difItems.map(()=>false); difRender(); } };
+$("#difCount").onclick=()=>{ if(difItems){ difPicked=difPicked.map(x=>!x); difRender(); } };
+$("#difCxl").onclick=()=>{ difReset(); };
+$("#difOk").onclick=async()=>{
+  if(!difItems) return toast("先点「比对」");
+  const cur=nodeAt(curPath)||DATA;
+  const before=snapTree();
+  const r=落地改动(cur,difItems,difPicked);
+  if(!r){ return toast("没选中要改的项"); }
+  pushUndo("改动「"+cur.name+"」："+r.label,before);
+  const ok=await save();
+  $("#plantModal").classList.remove("show"); difReset(); render();
+  toast("已落地 "+r.n+" 处改动"+(ok?"":"（但没能写回文件，留意一下）"));
 };
 
 // ---- 保存 ----
